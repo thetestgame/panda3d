@@ -98,6 +98,7 @@ PkgListSet(["PYTHON", "DIRECT",                        # Python support
   "PANDAPARTICLESYSTEM",                               # Built in particle system
   "CONTRIB",                                           # Experimental
   "SSE2", "NEON",                                      # Compiler features
+  "STEAMWORKS",                                        # Steamworks Integration
 ])
 
 CheckPandaSourceTree()
@@ -772,6 +773,16 @@ if (COMPILER == "MSVC"):
         LibName("BULLET", GetThirdpartyDir() + "bullet/lib/BulletDynamics" + suffix)
         LibName("BULLET", GetThirdpartyDir() + "bullet/lib/BulletSoftBody" + suffix)
 
+    if not PkgSkip("STEAMWORKS"):
+        basepath =  GetThirdpartyDir() + 'steamworks_sdk/sdk'
+        suffix = '.lib'
+        path = basepath + '/redistributable_bin'
+        if GetTargetArch() == 'x64':
+            suffix = '64.lib'
+            path += '/win64'
+        LibName("STEAMWORKS", path + '/steam_api' + suffix)
+        IncDirectory("STEAMWORKS", basepath + "/public/steam")
+
 if (COMPILER=="GCC"):
     PkgDisable("AWESOMIUM")
     if GetTarget() != "darwin":
@@ -798,6 +809,19 @@ if (COMPILER=="GCC"):
         if (os.path.isdir("/usr/PCBSD")):
             IncDirectory("ALWAYS", "/usr/PCBSD/local/include")
             LibDirectory("ALWAYS", "/usr/PCBSD/local/lib")
+
+    if not PkgSkip("STEAMWORKS"):
+        if GetTarget() == 'darwin':
+            LibName("STEAMWORKS", basepath + '/public/steam/lib/osx32/libsdkencryptedappticket.dylib')
+            LibName("STEAMWORKS", basepath + '/redistributable_bin/osx32/libsteam_api.dylib')
+        elif GetTarget() == 'linux':
+            if GetTargetArch() == 'x64':
+                LibName("STEAMWORKS", basepath + '/lib/linux64/libsdkencryptedappticket.so')
+                LibName("STEAMWORKS", basepath + '/redistributable_bin/linux32/libsteam_api.so')
+            else:
+                LibName("STEAMWORKS", basepath + '/lib/linux32/libsdkencryptedappticket.so')
+                LibName("STEAMWORKS", basepath + '/redistributable_bin/linux64/libsteam_api.so')
+        IncDirectory("STEAMWORKS", basepath + "/public/steam")
 
     if GetTarget() != "windows":
         PkgDisable("DIRECTCAM")
@@ -2821,6 +2845,8 @@ if not PkgSkip("ODE"):
     panda_modules.append('ode')
 if not PkgSkip("VRPN"):
     panda_modules.append('vrpn')
+if not PkgSkip("STEAMWORKS"):
+    panda_modules.append('steamworks')
 
 panda_modules_code = """
 "This module is deprecated.  Import from panda3d.core and other panda3d.* modules instead."
@@ -3280,6 +3306,9 @@ if (PkgSkip("PANDATOOL")==0):
 if (PkgSkip("CONTRIB")==0):
     CopyAllHeaders('contrib/src/contribbase')
     CopyAllHeaders('contrib/src/ai')
+
+if (PkgSkip('STEAMWORKS')==0):
+    CopyAllHeaders('panda/src/steamworks')
 
 ########################################################################
 #
@@ -5653,6 +5682,29 @@ if (RTDIST):
     TargetAdd('p3dembedw.exe', input='libp3tinyxml.ilb')
     TargetAdd('p3dembedw.exe', input='libp3d_plugin_static.ilb')
     TargetAdd('p3dembedw.exe', opts=['SUBSYSTEM:WINDOWS', 'NOICON', 'WINGDI', 'WINSOCK2', 'ZLIB', 'WINUSER', 'OPENSSL', 'WINOLE', 'MSIMG', 'WINCOMCTL', 'ADVAPI', 'WINSHELL'])
+
+#
+# DIRECTORY: panda/src/steamworks
+#
+if not PkgSkip("STEAMWORKS") and not RUNTIME:
+  OPTS=['DIR:panda/src/steamworks', 'BUILDING:STEAMWORKS', 'PYTHON', 'STEAMWORKS']
+  TargetAdd('p3steamworks_composite1.obj', opts=OPTS, input='p3steamworks_composite1.cxx')
+
+  IGATEFILES=GetDirectoryContents('panda/src/steamworks', ["*.h", "*_composite*.cxx"])
+  TargetAdd('libp3steamworks.in', opts=OPTS, input=IGATEFILES)
+  TargetAdd('libp3steamworks.in', opts=['IMOD:panda3d.steamworks', 'ILIB:libp3steamworks', 'SRCDIR:panda/src/steamworks'])
+  TargetAdd('libp3steamworks_igate.obj', input='libp3steamworks.in', opts=["DEPENDENCYONLY"])
+
+  TargetAdd('steamworks_module.obj', input='libp3steamworks.in')
+  TargetAdd('steamworks_module.obj', opts=OPTS)
+  TargetAdd('steamworks_module.obj', opts=['IMOD:panda3d.steamworks', 'ILIB:steamworks', 'IMPORT:panda3d.core'])
+
+  TargetAdd('steamworks.pyd', input='steamworks_module.obj')
+  TargetAdd('steamworks.pyd', input='libp3steamworks_igate.obj')
+  TargetAdd('steamworks.pyd', input='p3steamworks_composite1.obj')
+  TargetAdd('steamworks.pyd', input='libp3interrogatedb.dll')
+  TargetAdd('steamworks.pyd', input=COMMON_PANDA_LIBS)
+  TargetAdd('steamworks.pyd', opts=['PYTHON', 'STEAMWORKS'])
 
 #
 # DIRECTORY: pandatool/src/pandatoolbase/

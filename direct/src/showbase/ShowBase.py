@@ -47,6 +47,12 @@ if __debug__:
     from . import OnScreenDebug
 from . import AppRunnerGlobal
 
+try:
+    from panda3d.steamworks import *
+    has_steamworks = True
+except:
+    has_steamworks = False
+
 @atexit.register
 def exitfunc():
     if getattr(builtins, 'base', None) is not None:
@@ -320,6 +326,14 @@ class ShowBase(DirectObject.DirectObject):
 
         # Now we can make the TaskManager start using the new globalClock.
         taskMgr.globalClock = globalClock
+
+        # Check if we have steamworks and if it is configured. If configured and available
+        # configure the steamworks manager
+        if has_steamworks and self.config.GetBool('steamworks-support', True):
+            self.steamworksMgr = SteamworksManager.get_global_ptr()
+            self.steamworks_mgr = self.steamworksMgr
+
+            self.steamworksMgr.steam_init()
 
         # client CPU affinity is determined by, in order:
         # - client-cpu-affinity-mask config
@@ -1901,6 +1915,11 @@ class ShowBase(DirectObject.DirectObject):
             x.update()
         return Task.cont
 
+    def __steamworksLoop(self, state):
+        if hasattr(self, 'steamworksMgr'):
+            self.steamworksMgr.update()
+        return Task.cont
+
     def __garbageCollectStates(self, state):
         """ This task is started only when we have
         garbage-collect-states set in the Config.prc file, in which
@@ -2028,6 +2047,8 @@ class ShowBase(DirectObject.DirectObject):
         # the audioLoop updates the positions of 3D sounds.
         # as such, it needs to run after the cull traversal in the igLoop.
         self.taskMgr.add(self.__audioLoop, 'audioLoop', sort = 60)
+        # the steamworksLoop runs update tasks regarding the steamworks integration and performs steam callbacks
+        self.taskMgr.add(self.__steamworksLoop, 'steamworksLoop', sort=70)
         self.eventMgr.restart()
 
     def shutdown(self):
