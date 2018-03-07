@@ -3,14 +3,13 @@
 // your own project (or load it from the direct source tree) and build
 // on it with your own dc file for your own classes.
 
-keyword broadcast;
-keyword ram;
-keyword p2p;
-
-from direct.distributed import DistributedObject/AI
+from direct.distributed import DistributedObject/AI/UD
+from direct.distributed import DistributedObjectGlobal/AI/UD
 from direct.distributed import TimeManager/AI
-from direct.distributed import DistributedNode/AI
+from direct.distributed import DistributedNode/AI/UD
 from direct.distributed import DistributedSmoothNode/AI
+from direct.distributed import DistributedCartesianGrid/AI
+from direct.distributed import DistributedCamera/AI/OV
 
 struct BarrierData {
   uint16 context;
@@ -29,18 +28,21 @@ dclass DistributedObject {
   setLocation(uint32 parentId, uint32 zoneId) broadcast ram;
 };
 
+dclass DistributedObjectGlobal : DistributedObject {
+};
+
 dclass TimeManager: DistributedObject {
-  requestServerTime(uint8 context) p2p;
+  requestServerTime(uint8 context) aircv clsend;
   serverTime(uint8 context, int32 timestamp);
 };
 
 dclass DistributedNode: DistributedObject {
-  setX(int16 / 10) broadcast ram;
-  setY(int16 / 10) broadcast ram;
-  setZ(int16 / 10) broadcast ram;
-  setH(int16 % 360 / 10) broadcast ram;
-  setP(int16 % 360 / 10) broadcast ram;
-  setR(int16 % 360 / 10) broadcast ram;
+  setX(int16 / 10) roadcast ram ownsend airecv;
+  setY(int16 / 10) roadcast ram ownsend airecv;
+  setZ(int16 / 10) roadcast ram ownsend airecv;
+  setH(int16 % 360 / 10) broadcast ram ownsend airecv;
+  setP(int16 % 360 / 10) broadcast ram ownsend airecv;
+  setR(int16 % 360 / 10) broadcast ram ownsend airecv;
 
   setPos: setX, setY, setZ;
   setHpr: setH, setP, setR;
@@ -54,14 +56,14 @@ dclass DistributedNode: DistributedObject {
 dclass DistributedSmoothNode: DistributedNode {
   // Component set pos and hpr functions.
 
-  setComponentL(uint64) broadcast ram;
-  setComponentX(int16 / 10) broadcast ram;
-  setComponentY(int16 / 10) broadcast ram;
-  setComponentZ(int16 / 10) broadcast ram;
-  setComponentH(int16 % 360 / 10) broadcast ram;
-  setComponentP(int16 % 360 / 10) broadcast ram;
-  setComponentR(int16 % 360 / 10) broadcast ram;
-  setComponentT(int16 timestamp) broadcast ram;
+  setComponentL(uint64) broadcast ram ownsend airecv;
+  setComponentX(int16 / 10) broadcast ram ownsend airecv;
+  setComponentY(int16 / 10) broadcast ram ownsend airecv;
+  setComponentZ(int16 / 10) broadcast ram ownsend airecv;
+  setComponentH(int16 % 360 / 10) broadcast ram ownsend airecv;
+  setComponentP(int16 % 360 / 10) broadcast ram ownsend airecv;
+  setComponentR(int16 % 360 / 10) broadcast ram ownsend airecv;
+  setComponentT(int16 timestamp) broadcast ram ownsend airecv;
 
   // Composite set pos and hpr functions.  These map to combinations
   // of one or more of the above components.  They all include
@@ -80,12 +82,32 @@ dclass DistributedSmoothNode: DistributedNode {
   // keep position and 'location' in sync
   setSmPosHprL: setComponentL, setComponentX, setComponentY, setComponentZ, setComponentH, setComponentP, setComponentR, setComponentT;
 
-  clearSmoothing(int8 bogus) broadcast;
+  clearSmoothing(int8 bogus) broadcast ownsend;
 
   suggestResync(uint32 avId, int16 timestampA, int16 timestampB,
                 int32 serverTimeSec, uint16 serverTimeUSec,
-                uint16 / 100 uncertainty);
+                uint16 / 100 uncertainty) ownrecv clsend;
   returnResync(uint32 avId, int16 timestampB,
                int32 serverTimeSec, uint16 serverTimeUSec,
-               uint16 / 100 uncertainty);
+               uint16 / 100 uncertainty) ownrecv clsend;
 }; 
+
+dclass DistributedCartesianGrid : DistributedNode {
+  setCellWidth(uint32) required broadcast ram;
+  setParentingRules(string, string) broadcast ram;
+};
+
+struct Fixture {
+  int32/10 x;
+  int32/10 y;
+  int32/10 z;
+  int16/10 h;
+  int16/10 p;
+  int16/10 r;
+  string state;
+};
+
+dclass DistributedCamera : DistributedNode {
+  setCamParent(uint32) required broadcast ram ownsend airecv;
+  setFixtures(Fixture []) required broadcast ram ownsend airecv;
+};
