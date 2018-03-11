@@ -602,6 +602,7 @@ if (COMPILER == "MSVC"):
     LibName("WINGDI", "gdi32.lib")
     LibName("ADVAPI", "advapi32.lib")
     LibName("IPHLPAPI", "iphlpapi.lib")
+    LibName("SETUPAPI", "setupapi.lib")
     LibName("GL", "opengl32.lib")
     LibName("GLES", "libgles_cm.lib")
     LibName("GLES2", "libGLESv2.lib")
@@ -2416,6 +2417,7 @@ def WriteConfigSettings():
         dtool_config["HAVE_GLX"] = 'UNDEF'
         dtool_config["IS_LINUX"] = 'UNDEF'
         dtool_config["HAVE_VIDEO4LINUX"] = 'UNDEF'
+        dtool_config["PHAVE_LINUX_INPUT_H"] = 'UNDEF'
         dtool_config["IS_OSX"] = '1'
         # 10.4 had a broken ucontext implementation
         if int(platform.mac_ver()[0][3]) <= 4:
@@ -3896,6 +3898,21 @@ if (not RUNTIME):
   TargetAdd('libp3dgraph_igate.obj', input='libp3dgraph.in', opts=["DEPENDENCYONLY"])
 
 #
+# DIRECTORY: panda/src/device/
+#
+
+if (not RUNTIME):
+  OPTS=['DIR:panda/src/device', 'BUILDING:PANDA']
+  TargetAdd('p3device_composite1.obj', opts=OPTS, input='p3device_composite1.cxx')
+  TargetAdd('p3device_composite2.obj', opts=OPTS, input='p3device_composite2.cxx')
+
+  OPTS=['DIR:panda/src/device', 'PYTHON']
+  IGATEFILES=GetDirectoryContents('panda/src/device', ["*.h", "*_composite*.cxx"])
+  TargetAdd('libp3device.in', opts=OPTS, input=IGATEFILES)
+  TargetAdd('libp3device.in', opts=['IMOD:panda3d.core', 'ILIB:libp3device', 'SRCDIR:panda/src/device'])
+  TargetAdd('libp3device_igate.obj', input='libp3device.in', opts=["DEPENDENCYONLY"])
+
+#
 # DIRECTORY: panda/src/display/
 #
 
@@ -3918,21 +3935,6 @@ if (not RUNTIME):
     OPTS=['DIR:panda/src/display']
     TargetAdd('subprocessWindowBuffer.obj', opts=OPTS, input='subprocessWindowBuffer.cxx')
     TargetAdd('libp3subprocbuffer.ilb', input='subprocessWindowBuffer.obj')
-
-#
-# DIRECTORY: panda/src/device/
-#
-
-if (not RUNTIME):
-  OPTS=['DIR:panda/src/device', 'BUILDING:PANDA']
-  TargetAdd('p3device_composite1.obj', opts=OPTS, input='p3device_composite1.cxx')
-  TargetAdd('p3device_composite2.obj', opts=OPTS, input='p3device_composite2.cxx')
-
-  OPTS=['DIR:panda/src/device', 'PYTHON']
-  IGATEFILES=GetDirectoryContents('panda/src/device', ["*.h", "*_composite*.cxx"])
-  TargetAdd('libp3device.in', opts=OPTS, input=IGATEFILES)
-  TargetAdd('libp3device.in', opts=['IMOD:panda3d.core', 'ILIB:libp3device', 'SRCDIR:panda/src/device'])
-  TargetAdd('libp3device_igate.obj', input='libp3device.in', opts=["DEPENDENCYONLY"])
 
 #
 # DIRECTORY: panda/src/pnmtext/
@@ -4108,7 +4110,8 @@ if (not RUNTIME):
 if (not RUNTIME):
   OPTS=['DIR:panda/metalibs/panda', 'BUILDING:PANDA', 'JPEG', 'PNG', 'HARFBUZZ',
       'TIFF', 'OPENEXR', 'ZLIB', 'OPENSSL', 'FREETYPE', 'FFTW', 'ADVAPI', 'WINSOCK2',
-      'SQUISH', 'NVIDIACG', 'VORBIS', 'OPUS', 'WINUSER', 'WINMM', 'WINGDI', 'IPHLPAPI']
+      'SQUISH', 'NVIDIACG', 'VORBIS', 'OPUS', 'WINUSER', 'WINMM', 'WINGDI', 'IPHLPAPI',
+      'SETUPAPI']
 
   TargetAdd('panda_panda.obj', opts=OPTS, input='panda.cxx')
 

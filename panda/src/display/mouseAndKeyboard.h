@@ -63,7 +63,6 @@ private:
   PT(EventStoreVec2) _pixel_xy;
   PT(EventStoreVec2) _pixel_size;
   PT(EventStoreVec2) _xy;
-  PT(ButtonEventList) _button_events;
 
   PT(GraphicsWindow) _window;
   int _device;

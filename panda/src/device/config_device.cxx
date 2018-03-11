@@ -21,9 +21,12 @@
 #include "clientDialDevice.h"
 #include "clientTrackerDevice.h"
 #include "dialNode.h"
-#include "mouseAndKeyboard.h"
+#include "evdevInputDevice.h"
+#include "inputDevice.h"
+#include "linuxJoystickDevice.h"
 #include "trackerNode.h"
 #include "virtualMouse.h"
+#include "xInputDevice.h"
 
 #include "dconfig.h"
 
@@ -32,6 +35,9 @@ NotifyCategoryDef(device, "");
 
 ConfigVariableBool asynchronous_clients
 ("asynchronous-clients", true);
+
+ConfigVariableInt low_battery_level
+("low-battery-level", 15);
 
 ConfigureFn(config_device) {
   init_libdevice();
@@ -60,7 +66,16 @@ init_libdevice() {
   ClientDialDevice::init_type();
   ClientTrackerDevice::init_type();
   DialNode::init_type();
-  MouseAndKeyboard::init_type();
+  InputDevice::init_type();
   TrackerNode::init_type();
   VirtualMouse::init_type();
+
+#ifdef PHAVE_LINUX_INPUT_H
+  EvdevInputDevice::init_type();
+  LinuxJoystickDevice::init_type();
+#endif
+
+#ifdef _WIN32
+  XInputDevice::init_type();
+#endif
 }
