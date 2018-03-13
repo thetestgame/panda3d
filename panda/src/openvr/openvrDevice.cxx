@@ -93,17 +93,6 @@ void OpenVRDevice::process_tracking() {
 }
 
 /**
- * Returns the requested device property using the PVRTrackedDeviceProperty num
- */
-string OpenVRDevice::get_device_property(PVRTrackedDeviceProperty prop) {
-    PT(OpenVRSystem) manager = OpenVRSystem::get_global_ptr();
-    char property[1024];
-    manager->vr_system->GetStringTrackedDeviceProperty(device_index, (vr::ETrackedDeviceProperty) prop, property, sizeof(property));
-
-    return std::string(property);
-}
-
-/**
  * Returns the requested device property using the openvr ETrackedDeviceProperty enum
  */
 string OpenVRDevice::get_device_property(vr::ETrackedDeviceProperty prop) {

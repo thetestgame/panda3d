@@ -29,15 +29,14 @@ PUBLISHED:
   static OpenVRSystem* get_global_ptr();
 
   vr::EVRInitError init();
-
   void update();
+  void shutdown();
+
+  void reset_seated_zone_pose();
 
 public:
 
   INLINE bool get_vr_initialized() const;
-
-  // Pointer Management
-  static void shutdown();
 
   vr::IVRSystem* vr_system;
   OpenVRDevice *openvr_devices[vr::k_unMaxTrackedDeviceCount] = {nullptr};
@@ -70,4 +69,6 @@ public:
 private:
    static TypeHandle _type_handle;
 };
+
+#include "openvrSystem.I"
 #endif

@@ -42,11 +42,7 @@ OpenVRSystem::OpenVRSystem() {}
  *
  */
 OpenVRSystem::~OpenVRSystem() {
-    openvr_cat.info() << "Shutting down openvr" << std::endl;
-    if (_vr_initialized) {
-        vr::VR_Shutdown();
-        _vr_initialized = false;
-    }
+    shutdown();
 }
 
 /**
@@ -71,7 +67,7 @@ void OpenVRSystem::update() {
                     new_device = new OpenVRHmd();
                     break;
                 case vr::TrackedDeviceClass_Controller:
-                    //TODO
+                    //TODO: write down information regarding which hand this controller is asigned to
                     new_device = new OpenVRController("OpenVR Left Controller", InputDevice::DeviceClass::DC_left_hand);
                     break;
                 case vr::TrackedDeviceClass_TrackingReference:
@@ -151,22 +147,29 @@ vr::EVRInitError OpenVRSystem::init() {
         return vr::VRInitError_Init_HmdNotFound;
     }
 
-    /*
-    OpenVRHmd* hmd_device = new OpenVRHmd();
-    InputDeviceManager *inputMgr = InputDeviceManager::get_global_ptr();
-    inputMgr->add_device(hmd_device);
-    openvr_devices[vr::k_unTrackedDeviceIndex_Hmd] = hmd_device;
-    */
-
     _vr_initialized = true;
     return eError;
 }
 
 /**
- * Shuts down the openvr API and frees the global pointer
+ * Shuts down the OpenVR library
  */
 void OpenVRSystem::shutdown() {
-    // Remove the Pointer
-    delete _global_ptr;
-    _global_ptr = NULL;
+    openvr_cat.info() << "Shutting down openvr" << std::endl;
+    if (_vr_initialized) {
+        vr::VR_Shutdown();
+        _vr_initialized = false;
+    }
+}
+
+/**
+ * Sets the zero pose for the seated tracker coordinate system to the current position and yaw of the HMD.
+ */
+void OpenVRSystem::reset_seated_zone_pose() {
+
+    if (!_vr_initialized) {
+        return; //Not initialized. Nothing to do
+    }
+
+    vr_system->ResetSeatedZeroPose();
 }
