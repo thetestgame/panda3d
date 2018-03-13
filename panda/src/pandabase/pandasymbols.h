@@ -277,6 +277,14 @@
   #define EXPTP_VRPN IMPORT_TEMPL
 #endif
 
+#ifdef BUILDING_OPENVR
+  #define EXPCL_OPENVR EXPORT_CLASS
+  #define EXPTP_OPENVR EXPORT_TEMPL
+#else
+  #define EXPCL_OPENVR IMPORT_CLASS
+  #define EXPTP_OPENVR IMPORT_TEMPL
+#endif
+
 #if (defined(WIN32_VC) || defined(WIN64_VC)) && !defined(CPPPARSER)
 #define INLINE_LINMATH __forceinline
 #define INLINE_MATHUTIL __forceinline

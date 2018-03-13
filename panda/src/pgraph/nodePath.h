@@ -43,6 +43,7 @@
 #include "shaderInput.h"
 #include "textureCollection.h"
 #include "textureStageCollection.h"
+#include "inputDevice.h"
 
 class NodePathCollection;
 class FindApproxPath;
@@ -826,6 +827,10 @@ PUBLISHED:
   void set_compass(const NodePath &reference = NodePath());
   void clear_compass();
   bool has_compass() const;
+
+  void set_tracker(const InputDevice &device);
+  void clear_tracker();
+  bool has_tracker() const;
 
   void set_transparency(TransparencyAttrib::Mode mode, int priority = 0);
   void clear_transparency();

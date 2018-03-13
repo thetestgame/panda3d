@@ -89,6 +89,7 @@
 #include "texGenAttrib.h"
 #include "transformState.h"
 #include "transparencyAttrib.h"
+#include "trackerEffect.h"
 
 #include "dconfig.h"
 
@@ -458,6 +459,7 @@ init_libpgraph() {
   TexGenAttrib::init_type();
   TransformState::init_type();
   TransparencyAttrib::init_type();
+  TrackerEffect::init_type();
 
   AlphaTestAttrib::register_with_read_factory();
   AntialiasAttrib::register_with_read_factory();

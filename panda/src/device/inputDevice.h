@@ -78,6 +78,14 @@ PUBLISHED:
     // Head-mounted display.
     DC_hmd,
 
+    // Hand controllers for virtual reality
+    DC_left_hand,
+    DC_right_hand,
+
+    // This counts as any generic virtual reality tracked device that does not fall under a
+    // specific category.
+    DC_generic_tracker,
+
     // 3D mouse, such as produced by 3Dconnexion.
     DC_3d_mouse,
 

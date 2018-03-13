@@ -98,6 +98,7 @@ PkgListSet(["PYTHON", "DIRECT",                        # Python support
   "PANDAPARTICLESYSTEM",                               # Built in particle system
   "CONTRIB",                                           # Experimental
   "SSE2", "NEON",                                      # Compiler features
+  "OPENVR",                                            # SteamVR Support
 ])
 
 CheckPandaSourceTree()
@@ -773,6 +774,14 @@ if (COMPILER == "MSVC"):
         LibName("BULLET", GetThirdpartyDir() + "bullet/lib/BulletDynamics" + suffix)
         LibName("BULLET", GetThirdpartyDir() + "bullet/lib/BulletSoftBody" + suffix)
 
+    if not PkgSkip("OPENVR"):
+        basepath = GetThirdpartyDir() + 'openvr'
+        path = basepath + '/lib/win32/openvr_api.lib'
+        if GetTargetArch() == 'x64':
+            path = basepath + '/lib/win64/openvr_api.lib'
+        LibName("OPENVR", path)
+        IncDirectory("OPENVR", basepath + '/headers')
+
 if (COMPILER=="GCC"):
     PkgDisable("AWESOMIUM")
     if GetTarget() != "darwin":
@@ -799,6 +808,17 @@ if (COMPILER=="GCC"):
         if (os.path.isdir("/usr/PCBSD")):
             IncDirectory("ALWAYS", "/usr/PCBSD/local/include")
             LibDirectory("ALWAYS", "/usr/PCBSD/local/lib")
+
+    if not PkgSkip("OPENVR"):
+        basepath = GetThirdpartyDir() + 'openvr'
+        if GetTarget() == 'darwin':
+            LibName("OPENVR", basepath + '/lib/osx32/libopenvr_api.dylib')
+        elif GetTarget() == 'linux':
+            if GetTargetArch() == 'x64':
+                LibName("OPENVR", basepath + '/lib/linux32/libopenvr_api.so')
+            else:
+                LibName("OPENVR", basepath + '/lib/linux64/libopenvr_api.so')
+        IncDirectory("OPENVR", basepath + '/headers') 
 
     if GetTarget() != "windows":
         PkgDisable("DIRECTCAM")
@@ -2823,6 +2843,8 @@ if not PkgSkip("ODE"):
     panda_modules.append('ode')
 if not PkgSkip("VRPN"):
     panda_modules.append('vrpn')
+if not PkgSkip("OPENVR"):
+    panda_modules.append('openvr')
 
 panda_modules_code = """
 "This module is deprecated.  Import from panda3d.core and other panda3d.* modules instead."
@@ -3282,6 +3304,9 @@ if (PkgSkip("PANDATOOL")==0):
 if (PkgSkip("CONTRIB")==0):
     CopyAllHeaders('contrib/src/contribbase')
     CopyAllHeaders('contrib/src/ai')
+
+if (PkgSkip('OPENVR')==0):
+    CopyAllHeaders('panda/src/openvr')
 
 ########################################################################
 #
@@ -5658,6 +5683,29 @@ if (RTDIST):
     TargetAdd('p3dembedw.exe', opts=['SUBSYSTEM:WINDOWS', 'NOICON', 'WINGDI', 'WINSOCK2', 'ZLIB', 'WINUSER', 'OPENSSL', 'WINOLE', 'MSIMG', 'WINCOMCTL', 'ADVAPI', 'WINSHELL'])
 
 #
+# DIRECTORY: panda/src/openvr
+#
+if not PkgSkip("OPENVR"):
+  OPTS=['DIR:panda/src/openvr', 'BUILDING:OPENVR', 'PYTHON', 'OPENVR']
+  TargetAdd('p3openvr_composite1.obj', opts=OPTS, input='p3openvr_composite1.cxx')
+
+  IGATEFILES=GetDirectoryContents('panda/src/openvr', ["*.h", "*_composite*.cxx"])
+  TargetAdd('libp3openvr.in', opts=OPTS, input=IGATEFILES)
+  TargetAdd('libp3openvr.in', opts=['IMOD:panda3d.openvr', 'ILIB:libp3openvr', 'SRCDIR:panda/src/openvr'])
+  TargetAdd('libp3openvr_igate.obj', input='libp3openvr.in', opts=["DEPENDENCYONLY"])
+
+  TargetAdd('openvr_module.obj', input='libp3openvr.in')
+  TargetAdd('openvr_module.obj', opts=OPTS)
+  TargetAdd('openvr_module.obj', opts=['IMOD:panda3d.openvr', 'ILIB:openvr', 'IMPORT:panda3d.core'])
+
+  TargetAdd('openvr.pyd', input='openvr_module.obj')
+  TargetAdd('openvr.pyd', input='libp3openvr_igate.obj')
+  TargetAdd('openvr.pyd', input='p3openvr_composite1.obj')
+  TargetAdd('openvr.pyd', input='libp3interrogatedb.dll')
+  TargetAdd('openvr.pyd', input=COMMON_PANDA_LIBS)
+  TargetAdd('openvr.pyd', opts=['PYTHON', 'OPENVR'])
+
+#
 # DIRECTORY: pandatool/src/pandatoolbase/
 #
 
@@ -6598,6 +6646,13 @@ if not PkgSkip("DIRECT") and not RUNTIME and not PkgSkip("EGG"):
       else:
           newname = model[:-4] + ".egg"
       TargetAdd(GetOutputDir()+"/models/gui/"+newname, input="dmodels/src/gui/"+model)
+
+  for model in GetDirectoryContents("dmodels/src/openvr", model_extensions):
+      if (PkgSkip("ZLIB")==0 and PkgSkip("DEPLOYTOOLS")==0 and not RTDIST):
+          newname = model[:-4] + ".egg.pz"
+      else:
+          newname = model[:-4] + ".egg"
+      TargetAdd(GetOutputDir()+"/models/openvr/"+newname, input="dmodels/src/openvr/"+model)
 
   for model in GetDirectoryContents("models", model_extensions):
       if (PkgSkip("ZLIB")==0 and PkgSkip("DEPLOYTOOLS")==0 and not RTDIST):

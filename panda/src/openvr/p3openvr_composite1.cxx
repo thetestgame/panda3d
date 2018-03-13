@@ -1,0 +1,6 @@
+#include "config_openvr.cxx"
+#include "openvrDevice.cxx"
+#include "openvrController.cxx"
+#include "openvrHmd.cxx"
+#include "openvrBaseStation.cxx"
+#include "openvrSystem.cxx"

@@ -25,3 +25,4 @@
 #include "transparencyAttrib.cxx"
 #include "weakNodePath.cxx"
 #include "workingNodePath.cxx"
+#include "trackerEffect.cxx"

@@ -71,6 +71,8 @@
 #include "bam.h"
 #include "bamWriter.h"
 #include "datagramBuffer.h"
+#include "trackerEffect.h"
+#include "inputDevice.h"
 
 // stack seems to overflow on Intel C++ at 7000.  If we need more than 7000,
 // need to increase stack size.
@@ -4801,6 +4803,32 @@ bool NodePath::
 has_compass() const {
   nassertr_always(!is_empty(), false);
   return node()->has_effect(CompassEffect::get_class_type());
+}
+
+/**
+ * Puts a tracker effect on the node, so that it will retain a fixed ortation
+ * relative to the InputDevices TrackerData.
+ */
+void NodePath::
+set_tracker(const InputDevice &device) {
+  nassertv_always(!is_empty());
+  node()->set_effect(TrackerEffect::make(device));
+}
+
+/**
+ * Removes any tracker effect from the node.
+ */
+void NodePath::clear_tracker() {
+  nassertv_always(!is_empty());
+  node()->clear_effect(TrackerEffect::get_class_type());
+}
+
+/**
+ * Returns true if there are any tracker effects on the node.
+ */
+bool NodePath::has_tracker() const {
+  nassertr_always(!is_empty(), false);
+  return node()->has_effect(TrackerEffect::get_class_type());    
 }
 
 /**
