@@ -34,6 +34,8 @@ PUBLISHED:
 
   void reset_seated_zone_pose();
 
+  vr::EVRScreenshotError take_stereo_screenshot(const Filename &preview_file_path, const Filename &vr_file_path);
+
 public:
 
   INLINE bool get_vr_initialized() const;

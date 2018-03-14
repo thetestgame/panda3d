@@ -19,10 +19,9 @@
 class EXPCL_OPENVR OpenVRController : public OpenVRDevice {
 
 PUBLISHED:
+  virtual void do_poll();
 
-    virtual void do_poll();
-
-    void trigger_haptic_pulse(uint32_t axis_id, unsigned short duration_micro_sec);
+  void trigger_haptic_pulse(uint32_t axis_id, unsigned short duration_micro_sec);
 
 public:
   OpenVRController(const string &name, DeviceClass dev_class);
@@ -32,17 +31,17 @@ public:
     return _type_handle;
   }
   static void init_type() {
-    OpenVRDevice::init_type();
-    register_type(_type_handle, "OpenVRController",
-        OpenVRDevice::get_class_type());
+    TypedReferenceCount::init_type();
+    register_type(_type_handle, "OpenVRSystem",
+        TypedReferenceCount::get_class_type());
   }
   virtual TypeHandle get_type() const {
-        return get_class_type();
+    return get_class_type();
   }
   virtual TypeHandle force_init_type() {init_type(); return get_class_type();}
 
 private:
-  static TypeHandle _type_handle;
+   static TypeHandle _type_handle;
 };
 
 #endif

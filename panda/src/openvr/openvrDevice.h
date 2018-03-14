@@ -23,45 +23,43 @@ class EXPCL_OPENVR OpenVRDevice : public InputDevice {
 
 PUBLISHED:
 
-    int device_index = -1;
-    virtual void do_poll();
+  int device_index = -1;
+  virtual void do_poll();
 
 public:
-    OpenVRDevice(const string &name, DeviceClass dev_class, vr::ETrackedDeviceClass openvr_class);
-    ~OpenVRDevice();
+  OpenVRDevice(const string &name, DeviceClass dev_class, vr::ETrackedDeviceClass openvr_class);
+  ~OpenVRDevice();
 
-    string get_device_property(vr::ETrackedDeviceProperty prop);
-    INLINE string get_system_name();
-    INLINE string get_serial_number();
-    INLINE string get_model_name();
+  string get_device_property(vr::ETrackedDeviceProperty prop);
+  INLINE string get_system_name();
+  INLINE string get_serial_number();
+  INLINE string get_model_name();
 
 PUBLISHED:
-    MAKE_PROPERTY(system_name, get_system_name);
-    MAKE_PROPERTY(serial_number, get_serial_number);
-    MAKE_PROPERTY(model_name, get_model_name);
+  MAKE_PROPERTY(system_name, get_system_name);
+  MAKE_PROPERTY(serial_number, get_serial_number);
+  MAKE_PROPERTY(model_name, get_model_name);
 
 protected:
-    void process_tracking();
+  void process_tracking();
 
-    friend class OpenVRSystem;
+  friend class OpenVRSystem;
 public:
-    static TypeHandle get_class_type() {
-        return _type_handle;
-    }
-    static void init_type() {
-        InputDevice::init_type();
-        register_type(_type_handle, "OpenVRDevice",
-                      InputDevice::get_class_type());
-    }
-    virtual TypeHandle get_type() const {
-        return get_class_type();
-    }
-    virtual TypeHandle force_init_type() {
-        init_type();
-        return get_class_type();
-    }
+  static TypeHandle get_class_type() {
+    return _type_handle;
+  }
+  static void init_type() {
+    TypedReferenceCount::init_type();
+    register_type(_type_handle, "OpenVRSystem",
+        TypedReferenceCount::get_class_type());
+  }
+  virtual TypeHandle get_type() const {
+    return get_class_type();
+  }
+  virtual TypeHandle force_init_type() {init_type(); return get_class_type();}
+
 private:
-    static TypeHandle _type_handle;
+   static TypeHandle _type_handle;
 };
 
 #include "openvrDevice.I"

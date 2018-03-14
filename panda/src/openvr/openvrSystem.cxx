@@ -173,3 +173,34 @@ void OpenVRSystem::reset_seated_zone_pose() {
 
     vr_system->ResetSeatedZeroPose();
 }
+
+/**
+ * Captures a Stereographic virtual reality screenshot 
+ */
+vr::EVRScreenshotError take_stereo_screenshot(const Filename &preview_file_path, const Filename &vr_file_path) {
+
+    if (!_vr_initialized) {
+        //Not initialized. Nothing to do
+        return vr::EVRScreenshotError::VRScreenshotError_RequestFailed;; 
+    }
+
+    if (!vr::VRScreenshots()) {
+        openvr_cat.error() << "Unable to retrieve interface for VRScreenshot API\n";
+        return vr::EVRScreenshotError::VRScreenshotError_RequestFailed;
+    }
+
+    if (preview_file_path.empty() || vr_file_path.empty())
+    {
+        openvr_cat.error() << "File path is empty: preview (" <<
+            preview_file_path.c_str() << ") VR (" << vr_file_path.c_str() << ")\n";
+        return vr::EVRScreenshotError::VRScreenshotError_RequestFailed;
+    }
+
+     vr::ScreenshotHandle_t handle;
+     vr::EVRScreenshotError err = vr::VRScreenshots()->TakeStereoScreenshot(
+         &handle,
+         preview_file_path.c_str(),
+         vr_file_path.c_str());
+
+    return err;
+}
