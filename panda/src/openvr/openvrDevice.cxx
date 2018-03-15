@@ -25,8 +25,12 @@ TypeHandle OpenVRDevice::_type_handle;
  */
 OpenVRDevice::OpenVRDevice(const string &name, DeviceClass dev_class, vr::ETrackedDeviceClass openvr_class) 
     : InputDevice(name, dev_class, 0)  {
+    ovr_device_class = openvr_class;
+
     _name = get_system_name();
     _serial_number = get_serial_number();
+
+    _max_battery_level = 1;
 }
 
 /**
@@ -61,7 +65,15 @@ void OpenVRDevice::do_poll() {
         return;
     }
 
+    update_properties();
     process_tracking();
+}
+
+/**
+ * 
+ */
+void OpenVRDevice::update_properties() {
+    //TODO: Pull device properties into InputDevice
 }
 
 /**

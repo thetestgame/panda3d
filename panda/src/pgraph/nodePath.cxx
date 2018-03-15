@@ -4806,13 +4806,12 @@ has_compass() const {
 }
 
 /**
- * Puts a tracker effect on the node, so that it will retain a fixed ortation
- * relative to the InputDevices TrackerData.
+ *
  */
 void NodePath::
-set_tracker(const InputDevice &device) {
+set_tracker(const InputDevice *tracker, int tracked_axes) {
   nassertv_always(!is_empty());
-  node()->set_effect(TrackerEffect::make(device));
+  node()->set_effect(TrackerEffect::make(tracker, tracked_axes));
 }
 
 /**

@@ -21,10 +21,14 @@ class EXPCL_OPENVR OpenVRController : public OpenVRDevice {
 PUBLISHED:
   virtual void do_poll();
 
-  void trigger_haptic_pulse(uint32_t axis_id, unsigned short duration_micro_sec);
+  bool is_left_hand();
+  bool is_right_hand();
 
 public:
   OpenVRController(const string &name, DeviceClass dev_class);
+
+private:
+  uint32_t _last_input_packet_number = 0;
 
 public:
   static TypeHandle get_class_type() {

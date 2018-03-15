@@ -7,14 +7,31 @@
  * with this source code in a file named "LICENSE."
  *
  * @file trackerEffect.I
- * @author thetestgame
- * @date 2018-03-12
+ * @author rdb
+ * @date 2016-12-29
  */
 
 /**
- * Returns the InputDevice linked to this TrackerEffect.
+ * Use TrackerEffect::make() to construct a new TrackerEffect object.
  */
-INLINE const InputDevice & TrackerEffect::
+INLINE TrackerEffect::
+TrackerEffect(const InputDevice *device, int tracked_axes) :
+  _device(device), _tracked_axes(tracked_axes) {
+  nassertv(device != NULL);
+}
+
+/**
+ * Returns the tracker device.
+ */
+INLINE const InputDevice *TrackerEffect::
 get_device() const {
   return _device;
+}
+
+/**
+ * Returns a bitmask of tracked axes.
+ */
+INLINE int TrackerEffect::
+get_tracked_axes() const {
+  return _tracked_axes;
 }

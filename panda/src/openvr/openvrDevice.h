@@ -30,6 +30,8 @@ public:
   OpenVRDevice(const string &name, DeviceClass dev_class, vr::ETrackedDeviceClass openvr_class);
   ~OpenVRDevice();
 
+  vr::ETrackedDeviceClass ovr_device_class;
+
   string get_device_property(vr::ETrackedDeviceProperty prop);
   INLINE string get_system_name();
   INLINE string get_serial_number();
@@ -41,6 +43,8 @@ PUBLISHED:
   MAKE_PROPERTY(model_name, get_model_name);
 
 protected:
+
+  void update_properties();
   void process_tracking();
 
   friend class OpenVRSystem;

@@ -67,8 +67,11 @@ void OpenVRSystem::update() {
                     new_device = new OpenVRHmd();
                     break;
                 case vr::TrackedDeviceClass_Controller:
-                    //TODO: write down information regarding which hand this controller is asigned to
-                    new_device = new OpenVRController("OpenVR Left Controller", InputDevice::DeviceClass::DC_left_hand);
+                    if (device_index == vr_system->GetTrackedDeviceIndexForControllerRole(vr::ETrackedControllerRole::TrackedControllerRole_RightHand)) {
+                        new_device = new OpenVRController("OpenVR Right Controller", InputDevice::DeviceClass::DC_right_hand);
+                    } else {
+                        new_device = new OpenVRController("OpenVR Left Controller", InputDevice::DeviceClass::DC_left_hand);
+                    }
                     break;
                 case vr::TrackedDeviceClass_TrackingReference:
                     new_device = new OpenVRBaseStation("Base Station");
@@ -155,7 +158,7 @@ vr::EVRInitError OpenVRSystem::init() {
  * Shuts down the OpenVR library
  */
 void OpenVRSystem::shutdown() {
-    openvr_cat.info() << "Shutting down openvr" << std::endl;
+    openvr_cat.info() << "Shutting down openvr\n";
     if (_vr_initialized) {
         vr::VR_Shutdown();
         _vr_initialized = false;
@@ -177,7 +180,7 @@ void OpenVRSystem::reset_seated_zone_pose() {
 /**
  * Captures a Stereographic virtual reality screenshot 
  */
-vr::EVRScreenshotError take_stereo_screenshot(const Filename &preview_file_path, const Filename &vr_file_path) {
+vr::EVRScreenshotError OpenVRSystem::take_stereo_screenshot(const Filename &preview_file_path, const Filename &vr_file_path) {
 
     if (!_vr_initialized) {
         //Not initialized. Nothing to do

@@ -828,7 +828,7 @@ PUBLISHED:
   void clear_compass();
   bool has_compass() const;
 
-  void set_tracker(const InputDevice &device);
+  void set_tracker(const InputDevice *tracker, int tracked_axes);
   void clear_tracker();
   bool has_tracker() const;
 
