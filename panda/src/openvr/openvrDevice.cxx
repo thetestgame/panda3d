@@ -101,7 +101,7 @@ void OpenVRDevice::process_tracking() {
     LOrientation orient(q.w, q.x, -q.z, q.y);
 
     int real_time = ClockObject::get_global_clock()->get_real_time();
-    set_tracker(pos, orient, real_time);
+    set_tracker(pos * 5, orient, real_time);
 }
 
 /**

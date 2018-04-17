@@ -110,7 +110,7 @@ adjust_transform(CPT(TransformState) &net_transform,
   //cerr << "tracking: " << has_pos << ", " << has_orient << "\n";
 
   if (has_pos) {
-    node_transform = node_transform->set_pos(pose.get_pos() * 5);
+    node_transform = node_transform->set_pos(pose.get_pos());
   }
   if (has_orient) {
     node_transform = node_transform->set_quat(pose.get_orient());
