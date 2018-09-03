@@ -117,7 +117,7 @@ class WxPandaShell(WxAppShell):
           base.trackball.node().setHpr(0, 15, 0)
 
         # to make persp view as default
-        self.perspViewMenuItem.Toggle()
+        self.perspViewMenuItem.Check(not self.perspViewMenuItem.IsChecked)
         self.onViewChange(None, 3)
 
         # initializing direct
@@ -202,7 +202,7 @@ class WxPandaShell(WxAppShell):
         """A step in the WX event loop. You can either call this yourself or use as task."""
         while self.evtLoop.Pending():
           self.evtLoop.Dispatch()
-        self.wxApp.ProcessIdle()
+        self.evtLoop.ProcessIdle()
         if task != None: return task.cont
 
     def appInit(self):
