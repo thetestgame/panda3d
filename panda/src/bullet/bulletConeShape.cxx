@@ -13,6 +13,10 @@
 
 #include "bulletConeShape.h"
 
+#include "config_bullet.h"
+
+#include "bulletWorld.h"
+
 TypeHandle BulletConeShape::_type_handle;
 
 /**
@@ -21,7 +25,8 @@ TypeHandle BulletConeShape::_type_handle;
 BulletConeShape::
 BulletConeShape(PN_stdfloat radius, PN_stdfloat height, BulletUpAxis up) :
   _radius(radius),
-  _height(height) {
+  _height(height),
+  _up(up) {
 
   switch (up) {
   case X_up:
@@ -34,7 +39,7 @@ BulletConeShape(PN_stdfloat radius, PN_stdfloat height, BulletUpAxis up) :
     _shape = new btConeShapeZ((btScalar)radius, (btScalar)height);
     break;
   default:
-    bullet_cat.error() << "invalid up-axis:" << up << endl;
+    bullet_cat.error() << "invalid up-axis:" << up << std::endl;
     break;
   }
 
@@ -49,21 +54,27 @@ BulletConeShape::
 BulletConeShape(const BulletConeShape &copy) {
   LightMutexHolder holder(BulletWorld::get_global_lock());
 
-  _shape = copy._shape;
+  _up = copy._up;
   _radius = copy._radius;
   _height = copy._height;
-}
 
-/**
- *
- */
-void BulletConeShape::
-operator = (const BulletConeShape &copy) {
-  LightMutexHolder holder(BulletWorld::get_global_lock());
+  switch (_up) {
+  case X_up:
+    _shape = new btConeShapeX((btScalar)_radius, (btScalar)_height);
+    break;
+  case Y_up:
+    _shape = new btConeShape((btScalar)_radius, (btScalar)_height);
+    break;
+  case Z_up:
+    _shape = new btConeShapeZ((btScalar)_radius, (btScalar)_height);
+    break;
+  default:
+    bullet_cat.error() << "invalid up-axis:" << _up << std::endl;
+    break;
+  }
 
-  _shape = copy._shape;
-  _radius = copy._radius;
-  _height = copy._height;
+  nassertv(_shape);
+  _shape->setUserPointer(this);
 }
 
 /**
@@ -95,7 +106,7 @@ write_datagram(BamWriter *manager, Datagram &dg) {
   // parameters to serialize: radius, height, upIndex
   dg.add_stdfloat(_radius);
   dg.add_stdfloat(_height);
-  dg.add_int8((int8_t)_shape->getConeUpIndex());
+  dg.add_int8((int8_t)_up);
 }
 
 /**
@@ -130,9 +141,9 @@ fillin(DatagramIterator &scan, BamReader *manager) {
   // parameters to serialize: radius, height, up
   _radius = scan.get_stdfloat();
   _height = scan.get_stdfloat();
+  _up = (BulletUpAxis) scan.get_int8();
 
-  int up_index = (int) scan.get_int8();
-  switch (up_index) {
+  switch (_up) {
   case 0:
     _shape = new btConeShapeX((btScalar)_radius, (btScalar)_height);
     break;
@@ -143,7 +154,7 @@ fillin(DatagramIterator &scan, BamReader *manager) {
     _shape = new btConeShapeZ((btScalar)_radius, (btScalar)_height);
     break;
   default:
-    bullet_cat.error() << "invalid up-axis:" << up_index << endl;
+    bullet_cat.error() << "invalid up-axis:" << _up << std::endl;
     break;
   }
 

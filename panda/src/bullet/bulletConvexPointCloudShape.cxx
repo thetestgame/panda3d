@@ -13,6 +13,10 @@
 
 #include "bulletConvexPointCloudShape.h"
 
+#include "bulletWorld.h"
+
+#include "bullet_utils.h"
+
 #include "geomVertexReader.h"
 
 TypeHandle BulletConvexPointCloudShape::_type_handle;
@@ -92,18 +96,13 @@ BulletConvexPointCloudShape(const BulletConvexPointCloudShape &copy) {
   LightMutexHolder holder(BulletWorld::get_global_lock());
 
   _scale = copy._scale;
-  _shape = copy._shape;
-}
 
-/**
- *
- */
-void BulletConvexPointCloudShape::
-operator = (const BulletConvexPointCloudShape &copy) {
-  LightMutexHolder holder(BulletWorld::get_global_lock());
+  btVector3 *btPoints = copy._shape->getUnscaledPoints();
+  int numPoints = copy._shape->getNumPoints();
+  btVector3 btScale = LVecBase3_to_btVector3(_scale);
 
-  _scale = copy._scale;
-  _shape = copy._shape;
+  _shape = new btConvexPointCloudShape(btPoints, numPoints, btScale);
+  _shape->setUserPointer(this);
 }
 
 /**

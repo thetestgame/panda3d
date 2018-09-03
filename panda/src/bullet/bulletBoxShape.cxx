@@ -12,6 +12,9 @@
  */
 
 #include "bulletBoxShape.h"
+
+#include "bulletWorld.h"
+
 #include "bullet_utils.h"
 
 TypeHandle BulletBoxShape::_type_handle;
@@ -35,19 +38,11 @@ BulletBoxShape::
 BulletBoxShape(const BulletBoxShape &copy) {
   LightMutexHolder holder(BulletWorld::get_global_lock());
 
-  _shape = copy._shape;
   _half_extents = copy._half_extents;
-}
+  btVector3 btHalfExtents = LVecBase3_to_btVector3(_half_extents);
 
-/**
- *
- */
-void BulletBoxShape::
-operator = (const BulletBoxShape &copy) {
-  LightMutexHolder holder(BulletWorld::get_global_lock());
-
-  _shape = copy._shape;
-  _half_extents = copy._half_extents;
+  _shape = new btBoxShape(btHalfExtents);
+  _shape->setUserPointer(this);
 }
 
 /**

@@ -13,6 +13,7 @@
 
 #include "geomLinestripsAdjacency.h"
 #include "geomLines.h"
+#include "geomLinesAdjacency.h"
 #include "geomVertexRewriter.h"
 #include "pStatTimer.h"
 #include "bamReader.h"
@@ -141,7 +142,7 @@ decompose_impl() const {
     // Skip unused vertices between tristrips.
     vi += num_unused;
     int end = ends[li];
-    nassertr(vi + 3 <= end, lines.p());
+    nassertr(vi + 3 <= end, lines);
     int v0 = from.get_vertex(vi++);
     int v1 = from.get_vertex(vi++);
     int v2 = from.get_vertex(vi++);
@@ -159,7 +160,7 @@ decompose_impl() const {
   }
   nassertr(vi == num_vertices, nullptr);
 
-  return lines.p();
+  return lines;
 }
 
 /**

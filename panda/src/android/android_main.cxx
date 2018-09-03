@@ -12,16 +12,21 @@
  */
 
 #include "config_android.h"
-#include "config_util.h"
+#include "config_putil.h"
 #include "virtualFileMountAndroidAsset.h"
 #include "virtualFileSystem.h"
 #include "filename.h"
 #include "thread.h"
+#include "urlSpec.h"
 
 #include "config_display.h"
 // #define OPENGLES_1 #include "config_androiddisplay.h"
 
 #include <android_native_app_glue.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
+using std::string;
 
 // struct android_app* panda_android_app = NULL;
 
@@ -66,6 +71,55 @@ void android_main(struct android_app* app) {
 
   android_cat.info()
     << "New native activity started on " << *current_thread << "\n";
+
+  // Were we given an optional location to write the stdout/stderr streams?
+  methodID = env->GetMethodID(activity_class, "getIntentOutputUri", "()Ljava/lang/String;");
+  jstring joutput_uri = (jstring) env->CallObjectMethod(activity->clazz, methodID);
+  if (joutput_uri != nullptr) {
+    const char *output_uri = env->GetStringUTFChars(joutput_uri, nullptr);
+
+    if (output_uri != nullptr && output_uri[0] != 0) {
+      URLSpec spec(output_uri);
+
+      if (spec.get_scheme() == "file") {
+        string path = spec.get_path();
+        int fd = open(path.c_str(), O_CREAT | O_TRUNC | O_WRONLY);
+        if (fd != -1) {
+          android_cat.info()
+            << "Writing standard output to file " << path << "\n";
+
+          dup2(fd, 1);
+          dup2(fd, 2);
+        } else {
+          android_cat.error()
+            << "Failed to open output path " << path << "\n";
+        }
+      } else if (spec.get_scheme() == "tcp") {
+        string host = spec.get_server();
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        struct sockaddr_in serv_addr = {0};
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(spec.get_port());
+        serv_addr.sin_addr.s_addr = inet_addr(host.c_str());
+        if (connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == 0) {
+          android_cat.info()
+            << "Writing standard output to socket "
+            << spec.get_server_and_port() << "\n";
+          dup2(fd, 1);
+          dup2(fd, 2);
+        } else {
+          android_cat.error()
+            << "Failed to open output socket "
+            << spec.get_server_and_port() << "\n";
+        }
+        close(fd);
+      } else {
+        android_cat.error()
+          << "Unsupported scheme in output URI: " << output_uri << "\n";
+      }
+      env->ReleaseStringUTFChars(joutput_uri, output_uri);
+    }
+  }
 
   // Fetch the data directory.
   jmethodID get_appinfo = env->GetMethodID(activity_class, "getApplicationInfo", "()Landroid/content/pm/ApplicationInfo;");
@@ -145,7 +199,7 @@ void android_main(struct android_app* app) {
   get_model_path().append_directory(asset_dir);
 
   // Now load the configuration files.
-  vector<ConfigPage *> pages;
+  std::vector<ConfigPage *> pages;
   ConfigPageManager *cp_mgr;
   AAssetDir *etc = AAssetManager_openDir(app->activity->assetManager, "etc");
   if (etc != nullptr) {
@@ -157,7 +211,7 @@ void android_main(struct android_app* app) {
         GlobPattern pattern = cp_mgr->get_prc_pattern(i);
         if (pattern.matches(filename)) {
           Filename prc_fn("etc", filename);
-          istream *in = asset_mount->open_read_file(prc_fn);
+          std::istream *in = asset_mount->open_read_file(prc_fn);
           if (in != nullptr) {
             ConfigPage *page = cp_mgr->make_explicit_page(Filename("/android_asset", prc_fn));
             page->read_prc(*in);
@@ -183,28 +237,6 @@ void android_main(struct android_app* app) {
     if (!fn.exists()) {
       // Show a toast with the failure message.
       android_show_toast(activity, string("Unable to access ") + filename_str, 1);
-    }
-  }
-
-  // Were we given an optional location to write the stdout/stderr streams?
-  methodID = env->GetMethodID(activity_class, "getIntentOutputPath", "()Ljava/lang/String;");
-  jstring joutput_path = (jstring) env->CallObjectMethod(activity->clazz, methodID);
-  if (joutput_path != nullptr) {
-    const char *output_path = env->GetStringUTFChars(joutput_path, nullptr);
-
-    if (output_path != nullptr && output_path[0] != 0) {
-      int fd = open(output_path, O_CREAT | O_TRUNC | O_WRONLY);
-      if (fd != -1) {
-        android_cat.info()
-          << "Writing standard output to file " << output_path << "\n";
-
-        dup2(fd, 1);
-        dup2(fd, 2);
-      } else {
-        android_cat.error()
-          << "Failed to open output path " << output_path << "\n";
-      }
-      env->ReleaseStringUTFChars(joutput_path, output_path);
     }
   }
 
@@ -265,6 +297,9 @@ void android_main(struct android_app* app) {
   if (filename_str != nullptr) {
     env->ReleaseStringUTFChars(filename, filename_str);
   }
+
+  close(1);
+  close(2);
 
   // Detach the thread before exiting.
   activity->vm->DetachCurrentThread();

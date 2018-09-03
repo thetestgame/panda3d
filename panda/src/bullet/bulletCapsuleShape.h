@@ -20,6 +20,8 @@
 #include "bullet_utils.h"
 #include "bulletShape.h"
 
+#include "collisionTube.h"
+
 /**
  *
  */
@@ -31,8 +33,9 @@ private:
 PUBLISHED:
   explicit BulletCapsuleShape(PN_stdfloat radius, PN_stdfloat height, BulletUpAxis up=Z_up);
   BulletCapsuleShape(const BulletCapsuleShape &copy);
-  void operator = (const BulletCapsuleShape &copy);
   INLINE ~BulletCapsuleShape();
+
+  static BulletCapsuleShape *make_from_solid(const CollisionTube *solid);
 
   INLINE PN_stdfloat get_radius() const;
   INLINE PN_stdfloat get_half_height() const;
@@ -50,6 +53,7 @@ private:
   btCapsuleShape *_shape;
   PN_stdfloat _radius;
   PN_stdfloat _height;
+  BulletUpAxis _up;
 
 public:
   static void register_with_read_factory();

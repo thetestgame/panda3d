@@ -30,6 +30,7 @@
 
 #import "cocoaPandaView.h"
 #import "cocoaPandaWindow.h"
+#import "cocoaPandaAppDelegate.h"
 
 #import <ApplicationServices/ApplicationServices.h>
 #import <Foundation/NSAutoreleasePool.h>
@@ -49,7 +50,7 @@ TypeHandle CocoaGraphicsWindow::_type_handle;
  */
 CocoaGraphicsWindow::
 CocoaGraphicsWindow(GraphicsEngine *engine, GraphicsPipe *pipe,
-                    const string &name,
+                    const std::string &name,
                     const FrameBufferProperties &fb_prop,
                     const WindowProperties &win_prop,
                     int flags,
@@ -71,11 +72,31 @@ CocoaGraphicsWindow(GraphicsEngine *engine, GraphicsPipe *pipe,
   if (NSApp == nil) {
     [CocoaPandaApp sharedApplication];
 
+    CocoaPandaAppDelegate *delegate = [[CocoaPandaAppDelegate alloc] init];
+    [NSApp setDelegate:delegate];
+
 #if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 #endif
+    NSMenu *mainMenu = [[NSMenu alloc] init];
+
+    NSMenuItem *applicationMenuItem = [[NSMenuItem alloc] init];
+    [mainMenu addItem:applicationMenuItem];
+
+    NSMenu *applicationMenu = [[NSMenu alloc] init];
+
+    NSMenuItem *item = [[NSMenuItem alloc] init];
+    item.action = @selector(terminate:);
+    item.keyEquivalent = @"q";
+
+    NSString *appName = [NSRunningApplication currentApplication].localizedName;
+    item.title = [NSString stringWithFormat:@"Quit %@", appName];
+
+    [applicationMenu addItem:item];
+
+    [mainMenu setSubmenu:applicationMenu forItem:applicationMenuItem];
+    [NSApp setMainMenu:mainMenu];
     [NSApp finishLaunching];
-    [NSApp activateIgnoringOtherApps:YES];
   }
 
   GraphicsWindowInputDevice device =
@@ -341,6 +362,13 @@ open_window() {
     }
   }
 
+  if (cocoagsg->_context == nil) {
+    // Could not obtain a proper context.
+    _gsg.clear();
+    close_window();
+    return false;
+  }
+
   // Fill in the blanks.
   if (!_properties.has_origin()) {
     _properties.set_origin(-2, -2);
@@ -384,7 +412,7 @@ open_window() {
       cocoadisplay_cat.info()
         << "os_handle type " << os_handle->get_type() << "\n";
 
-      void *ptr_handle;
+      void *ptr_handle = nullptr;
 
       // Depending on whether the window handle comes from a Carbon or a Cocoa
       // application, it could be either a HIViewRef or an NSView or NSWindow.
@@ -624,6 +652,9 @@ open_window() {
     return false;
   }
   _fb_properties = cocoagsg->get_fb_properties();
+
+  // Reset dead key state.
+  _dead_key_state = 0;
 
   // Get the initial mouse position.
   NSPoint pos = [_window mouseLocationOutsideOfEventStream];
@@ -1262,7 +1293,7 @@ load_image(const Filename &filename) {
   if (vfile == NULL) {
     return nil;
   }
-  istream *str = vfile->open_read_file(true);
+  std::istream *str = vfile->open_read_file(true);
   if (str == NULL) {
     cocoadisplay_cat.error()
       << "Could not open file " << filename << " for reading\n";
@@ -1391,6 +1422,8 @@ handle_foreground_event(bool foreground) {
     }
   }
 
+  _dead_key_state = 0;
+
   WindowProperties properties;
   properties.set_foreground(foreground);
   system_changed_properties(properties);
@@ -1416,7 +1449,7 @@ handle_foreground_event(bool foreground) {
  */
 bool CocoaGraphicsWindow::
 handle_close_request() {
-  string close_request_event = get_close_request_event();
+  std::string close_request_event = get_close_request_event();
   if (!close_request_event.empty()) {
     // In this case, the app has indicated a desire to intercept the request
     // and process it directly.
@@ -1564,25 +1597,43 @@ handle_key_event(NSEvent *event) {
     return;
   }
 
-  NSString *str = [event charactersIgnoringModifiers];
-  if (str == nil || [str length] == 0) {
-    return;
-  }
-  nassertv([str length] == 1);
-  unichar c = [str characterAtIndex: 0];
+  if ([event type] == NSKeyDown) {
+    // Translate it to a unicode character for keystrokes.  I would use
+    // interpretKeyEvents and insertText, but that doesn't handle dead keys.
+    TISInputSourceRef input_source = TISCopyCurrentKeyboardInputSource();
+    CFDataRef layout_data = (CFDataRef)TISGetInputSourceProperty(input_source, kTISPropertyUnicodeKeyLayoutData);
+    const UCKeyboardLayout *layout = (const UCKeyboardLayout *)CFDataGetBytePtr(layout_data);
 
-  ButtonHandle button = map_key(c);
+    UInt32 modifier_state = (modifierFlags >> 16) & 0xFF;
+    UniChar ustr[8];
+    UniCharCount length;
 
-  if (c < 0xF700 || c >= 0xF900) {
-    // If a down event and not a special function key, process it as keystroke
-    // as well.
-    if ([event type] == NSKeyDown) {
-      NSString *origstr = [event characters];
-      c = [str characterAtIndex: 0];
+    UCKeyTranslate(layout, [event keyCode], kUCKeyActionDown, modifier_state,
+                   LMGetKbdType(), 0, &_dead_key_state, sizeof(ustr), &length, ustr);
+    CFRelease(input_source);
+
+    for (int i = 0; i < length; ++i) {
+      UniChar c = ustr[i];
+      if (cocoadisplay_cat.is_spam()) {
+        cocoadisplay_cat.spam()
+          << "Handling keystroke, character " << (int)c;
+        if (c < 128 && isprint(c)) {
+          cocoadisplay_cat.spam(false) << " '" << (char)c << "'";
+        }
+        cocoadisplay_cat.spam(false) << "\n";
+      }
       _input_devices[0].keystroke(c);
     }
   }
 
+  NSString *str = [event charactersIgnoringModifiers];
+  if (str == nil || [str length] == 0) {
+    return;
+  }
+  nassertv_always([str length] == 1);
+  unichar c = [str characterAtIndex: 0];
+
+  ButtonHandle button = map_key(c);
   if (button == ButtonHandle::none()) {
     // That done, continue trying to find out the button handle.
     if ([str canBeConvertedToEncoding: NSASCIIStringEncoding]) {

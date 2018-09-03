@@ -18,6 +18,10 @@
 #include "pandaSystem.h"
 #include "dconfig.h"
 
+#if !defined(CPPPARSER) && !defined(LINK_ALL_STATIC) && !defined(BUILDING_OPENAL_AUDIO)
+  #error Buildsystem error: BUILDING_OPENAL_AUDIO not defined
+#endif
+
 ConfigureDef(config_openalAudio);
 NotifyCategoryDef(openalAudio, ":audio");
 

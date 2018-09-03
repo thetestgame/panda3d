@@ -22,6 +22,7 @@
 #include "luse.h"
 #include "geom.h"
 #include "pta_LVecBase3.h"
+#include "transformState.h"
 
 /**
  *
@@ -30,7 +31,6 @@ class EXPCL_PANDABULLET BulletConvexHullShape : public BulletShape {
 PUBLISHED:
   BulletConvexHullShape();
   BulletConvexHullShape(const BulletConvexHullShape &copy);
-  void operator = (const BulletConvexHullShape &copy);
   INLINE ~BulletConvexHullShape();
 
   void add_point(const LPoint3 &p);

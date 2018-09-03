@@ -19,6 +19,10 @@
 #include "pandaSystem.h"
 #include "dconfig.h"
 
+#if !defined(CPPPARSER) && !defined(LINK_ALL_STATIC) && !defined(BUILDING_FMOD_AUDIO)
+  #error Buildsystem error: BUILDING_FMOD_AUDIO not defined
+#endif
+
 ConfigureDef(config_fmodAudio);
 NotifyCategoryDef(fmodAudio, ":audio");
 

@@ -38,6 +38,10 @@
 #include <linux/input.h>
 #endif
 
+using std::istream;
+using std::ostringstream;
+using std::string;
+
 struct _XcursorFile {
   void *closure;
   int (*read)(XcursorFile *, unsigned char *, int);
@@ -105,9 +109,9 @@ x11GraphicsWindow(GraphicsEngine *engine, GraphicsPipe *pipe,
   DCAST_INTO_V(x11_pipe, _pipe);
   _display = x11_pipe->get_display();
   _screen = x11_pipe->get_screen();
-  _xwindow = (X11_Window)NULL;
-  _ic = (XIC)NULL;
-  _visual_info = NULL;
+  _xwindow = (X11_Window)nullptr;
+  _ic = (XIC)nullptr;
+  _visual_info = nullptr;
   _orig_size_id = -1;
 
   if (x11_pipe->_have_xrandr) {
@@ -132,11 +136,46 @@ x11GraphicsWindow(GraphicsEngine *engine, GraphicsPipe *pipe,
  */
 x11GraphicsWindow::
 ~x11GraphicsWindow() {
-  pmap<Filename, X11_Cursor>::iterator it;
-
-  for (it = _cursor_filenames.begin(); it != _cursor_filenames.end(); it++) {
-    XFreeCursor(_display, it->second);
+  if (!_cursor_filenames.empty()) {
+    LightReMutexHolder holder(x11GraphicsPipe::_x_mutex);
+    for (auto item : _cursor_filenames) {
+      XFreeCursor(_display, item.second);
+    }
   }
+}
+
+/**
+ * Returns the MouseData associated with the nth input device's pointer.  This
+ * is deprecated; use get_pointer_device().get_pointer() instead, or for raw
+ * mice, use the InputDeviceManager interface.
+ */
+MouseData x11GraphicsWindow::
+get_pointer(int device) const {
+  MouseData result;
+  {
+    LightMutexHolder holder(_input_lock);
+    nassertr(device >= 0 && device < (int)_input_devices.size(), MouseData());
+
+    result = _input_devices[device].get_pointer();
+
+    // We recheck this immediately to get the most up-to-date value, but we
+    // won't bother waiting for the lock if we can't.
+    if (device == 0 && !_dga_mouse_enabled && result._in_window &&
+        x11GraphicsPipe::_x_mutex.try_lock()) {
+      XEvent event;
+      if (_xwindow != None &&
+          XQueryPointer(_display, _xwindow, &event.xbutton.root,
+          &event.xbutton.window, &event.xbutton.x_root, &event.xbutton.y_root,
+          &event.xbutton.x, &event.xbutton.y, &event.xbutton.state)) {
+        double time = ClockObject::get_global_clock()->get_real_time();
+        result._xpos = event.xbutton.x;
+        result._ypos = event.xbutton.y;
+        ((GraphicsWindowInputDevice &)_input_devices[0]).set_pointer_in_window(result._xpos, result._ypos, time);
+      }
+      x11GraphicsPipe::_x_mutex.release();
+    }
+  }
+  return result;
 }
 
 /**
@@ -163,6 +202,7 @@ move_pointer(int device, int x, int y) {
     const MouseData &md = _input_devices[0].get_pointer();
     if (!md.get_in_window() || md.get_x() != x || md.get_y() != y) {
       if (!_dga_mouse_enabled) {
+        LightReMutexHolder holder(x11GraphicsPipe::_x_mutex);
         XWarpPointer(_display, None, _xwindow, 0, 0, 0, 0, x, y);
       }
       _input_devices[0].set_pointer_in_window(x, y);
@@ -170,7 +210,7 @@ move_pointer(int device, int x, int y) {
     return true;
   } else {
     // Move a raw mouse.
-    if ((device < 1)||(device >= _input_devices.size())) {
+    if (device < 1 || (size_t)device >= _input_devices.size()) {
       return false;
     }
     _input_devices[device].set_pointer_in_window(x, y);
@@ -189,7 +229,7 @@ begin_frame(FrameMode mode, Thread *current_thread) {
   PStatTimer timer(_make_current_pcollector, current_thread);
 
   begin_frame_spam(mode);
-  if (_gsg == (GraphicsStateGuardian *)NULL) {
+  if (_gsg == nullptr) {
     return false;
   }
   if (_awaiting_configure) {
@@ -220,7 +260,7 @@ begin_frame(FrameMode mode, Thread *current_thread) {
 void x11GraphicsWindow::
 end_frame(FrameMode mode, Thread *current_thread) {
   end_frame_spam(mode);
-  nassertv(_gsg != (GraphicsStateGuardian *)NULL);
+  nassertv(_gsg != nullptr);
 
   if (mode == FM_render) {
     // end_render_texture();
@@ -446,6 +486,21 @@ process_events() {
         XConfigureWindow(_display, _xwindow, value_mask, &changes);
       }
     }
+
+    // If the window was reconfigured, we may need to re-confine the mouse
+    // pointer.  See GitHub bug #280.
+    if (_properties.get_mouse_mode() == WindowProperties::M_confined) {
+      X11_Cursor cursor = None;
+      if (_properties.get_cursor_hidden()) {
+        x11GraphicsPipe *x11_pipe;
+        DCAST_INTO_V(x11_pipe, _pipe);
+        cursor = x11_pipe->get_hidden_cursor();
+      }
+
+      XGrabPointer(_display, _xwindow, True, 0, GrabModeAsync, GrabModeAsync,
+                   _xwindow, cursor, CurrentTime);
+    }
+
     changed_properties = true;
   }
 
@@ -474,7 +529,7 @@ process_events() {
  */
 void x11GraphicsWindow::
 set_properties_now(WindowProperties &properties) {
-  if (_pipe == (GraphicsPipe *)NULL) {
+  if (_pipe == nullptr) {
     // If the pipe is null, we're probably closing down.
     GraphicsWindow::set_properties_now(properties);
     return;
@@ -482,6 +537,8 @@ set_properties_now(WindowProperties &properties) {
 
   x11GraphicsPipe *x11_pipe;
   DCAST_INTO_V(x11_pipe, _pipe);
+
+  LightReMutexHolder holder(x11GraphicsPipe::_x_mutex);
 
   // We're either going into or out of fullscreen, or are in fullscreen and
   // are changing the resolution.
@@ -805,18 +862,19 @@ mouse_mode_relative() {
  */
 void x11GraphicsWindow::
 close_window() {
-  if (_gsg != (GraphicsStateGuardian *)NULL) {
+  if (_gsg != nullptr) {
     _gsg.clear();
   }
 
-  if (_ic != (XIC)NULL) {
+  LightReMutexHolder holder(x11GraphicsPipe::_x_mutex);
+  if (_ic != (XIC)nullptr) {
     XDestroyIC(_ic);
-    _ic = (XIC)NULL;
+    _ic = (XIC)nullptr;
   }
 
-  if (_xwindow != (X11_Window)NULL) {
+  if (_xwindow != (X11_Window)nullptr) {
     XDestroyWindow(_display, _xwindow);
-    _xwindow = (X11_Window)NULL;
+    _xwindow = (X11_Window)nullptr;
 
     // This may be necessary if we just closed the last X window in an
     // application, so the server hears the close request.
@@ -827,7 +885,7 @@ close_window() {
   // typecast!
   if (_orig_size_id != (SizeID) -1) {
     X11_Window root;
-    if (_pipe != NULL) {
+    if (_pipe != nullptr) {
       x11GraphicsPipe *x11_pipe;
       DCAST_INTO_V(x11_pipe, _pipe);
       root = x11_pipe->get_root();
@@ -850,7 +908,7 @@ close_window() {
  */
 bool x11GraphicsWindow::
 open_window() {
-  if (_visual_info == NULL) {
+  if (_visual_info == nullptr) {
     // No X visual for this fbconfig; how can we open the window?
     x11display_cat.error()
       << "No X visual: cannot open window.\n";
@@ -866,6 +924,9 @@ open_window() {
   if (!_properties.has_size()) {
     _properties.set_size(100, 100);
   }
+
+  // Make sure we are not making X11 calls from other threads.
+  LightReMutexHolder holder(x11GraphicsPipe::_x_mutex);
 
   if (_properties.get_fullscreen() && x11_pipe->_have_xrandr) {
     XRRScreenConfiguration* conf = _XRRGetScreenInfo(_display, x11_pipe->get_root());
@@ -897,11 +958,11 @@ open_window() {
 
   X11_Window parent_window = x11_pipe->get_root();
   WindowHandle *window_handle = _properties.get_parent_window();
-  if (window_handle != NULL) {
+  if (window_handle != nullptr) {
     x11display_cat.info()
       << "Got parent_window " << *window_handle << "\n";
     WindowHandle::OSHandle *os_handle = window_handle->get_os_handle();
-    if (os_handle != NULL) {
+    if (os_handle != nullptr) {
       x11display_cat.info()
         << "os_handle type " << os_handle->get_type() << "\n";
 
@@ -958,13 +1019,13 @@ open_window() {
   // can wait until we have an X server that actually supports these to test
   // it on.
   XIM im = x11_pipe->get_im();
-  _ic = NULL;
+  _ic = nullptr;
   if (im) {
     _ic = XCreateIC
       (im,
        XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
-       (void*)NULL);
-    if (_ic == (XIC)NULL) {
+       nullptr);
+    if (_ic == (XIC)nullptr) {
       x11display_cat.warning()
         << "Couldn't create input context.\n";
     }
@@ -994,7 +1055,7 @@ open_window() {
   _window_handle = NativeWindowHandle::make_x11(_xwindow);
 
   // And tell our parent window that we're now its child.
-  if (_parent_window_handle != (WindowHandle *)NULL) {
+  if (_parent_window_handle != nullptr) {
     _parent_window_handle->attach_child(_window_handle);
   }
 
@@ -1010,6 +1071,8 @@ open_window() {
  * If already_mapped is true, the window has already been mapped (manifested)
  * on the display.  This means we may need to use a different action in some
  * cases.
+ *
+ * Assumes the X11 lock is held.
  */
 void x11GraphicsWindow::
 set_wm_properties(const WindowProperties &properties, bool already_mapped) {
@@ -1018,7 +1081,7 @@ set_wm_properties(const WindowProperties &properties, bool already_mapped) {
 
   // Name the window if there is a name
   XTextProperty window_name;
-  XTextProperty *window_name_p = (XTextProperty *)NULL;
+  XTextProperty *window_name_p = nullptr;
   if (properties.has_title()) {
     const char *name = properties.get_title().c_str();
     if (XStringListToTextProperty((char **)&name, 1, &window_name) != 0) {
@@ -1028,10 +1091,10 @@ set_wm_properties(const WindowProperties &properties, bool already_mapped) {
 
   // The size hints request a window of a particular size andor a particular
   // placement onscreen.
-  XSizeHints *size_hints_p = NULL;
+  XSizeHints *size_hints_p = nullptr;
   if (properties.has_origin() || properties.has_size()) {
     size_hints_p = XAllocSizeHints();
-    if (size_hints_p != (XSizeHints *)NULL) {
+    if (size_hints_p != nullptr) {
       if (properties.has_origin()) {
         if (_properties.get_fullscreen()) {
           size_hints_p->x = 0;
@@ -1061,9 +1124,9 @@ set_wm_properties(const WindowProperties &properties, bool already_mapped) {
 
   // The window manager hints include requests to the window manager other
   // than those specific to window geometry.
-  XWMHints *wm_hints_p = NULL;
+  XWMHints *wm_hints_p = nullptr;
   wm_hints_p = XAllocWMHints();
-  if (wm_hints_p != (XWMHints *)NULL) {
+  if (wm_hints_p != nullptr) {
     if (properties.has_minimized() && properties.get_minimized()) {
       wm_hints_p->initial_state = IconicState;
     } else {
@@ -1120,7 +1183,7 @@ set_wm_properties(const WindowProperties &properties, bool already_mapped) {
   // For other users, we'll totally punt and just set the window's Class to
   // "Undecorated", and let the user configure hisher window manager not to
   // put a border around windows of this class.
-  XClassHint *class_hints_p = NULL;
+  XClassHint *class_hints_p = nullptr;
   if (!x_wm_class.empty()) {
     // Unless the user wanted to use his own WM_CLASS, of course.
     class_hints_p = XAllocClassHint();
@@ -1211,15 +1274,15 @@ set_wm_properties(const WindowProperties &properties, bool already_mapped) {
   }
 
   XSetWMProperties(_display, _xwindow, window_name_p, window_name_p,
-                   NULL, 0, size_hints_p, wm_hints_p, class_hints_p);
+                   nullptr, 0, size_hints_p, wm_hints_p, class_hints_p);
 
-  if (size_hints_p != (XSizeHints *)NULL) {
+  if (size_hints_p != nullptr) {
     XFree(size_hints_p);
   }
-  if (wm_hints_p != (XWMHints *)NULL) {
+  if (wm_hints_p != nullptr) {
     XFree(wm_hints_p);
   }
-  if (class_hints_p != (XClassHint *)NULL) {
+  if (class_hints_p != nullptr) {
     XFree(class_hints_p);
   }
 
@@ -1333,9 +1396,7 @@ open_raw_mice() {
 void x11GraphicsWindow::
 poll_raw_mice() {
 #ifdef PHAVE_LINUX_INPUT_H
-  for (int di = 0; di < _mouse_device_info.size(); ++di) {
-    MouseDeviceInfo &inf = _mouse_device_info[di];
-
+  for (MouseDeviceInfo &inf : _mouse_device_info) {
     // Read all bytes into buffer.
     if (inf._fd >= 0) {
       while (1) {
@@ -1402,7 +1463,7 @@ handle_keystroke(XKeyEvent &event) {
     static const int buffer_size = 256;
     wchar_t buffer[buffer_size];
     Status status;
-    int len = XwcLookupString(_ic, &event, buffer, buffer_size, NULL,
+    int len = XwcLookupString(_ic, &event, buffer, buffer_size, nullptr,
                               &status);
     if (status == XBufferOverflow) {
       x11display_cat.error()
@@ -1897,7 +1958,7 @@ map_button(KeySym key) const {
   }
   if (x11display_cat.is_debug()) {
     x11display_cat.debug()
-      << "Unrecognized keysym 0x" << hex << key << dec << "\n";
+      << "Unrecognized keysym 0x" << std::hex << key << std::dec << "\n";
   }
   return ButtonHandle::none();
 }
@@ -2118,7 +2179,7 @@ get_cursor(const Filename &filename) {
 
   // Open the file through the virtual file system.
   istream *str = vfs->open_read_file(resolved, true);
-  if (str == NULL) {
+  if (str == nullptr) {
     x11display_cat.warning()
       << "Could not open cursor file " << filename << "\n";
     return None;
@@ -2132,7 +2193,13 @@ get_cursor(const Filename &filename) {
       << "Could not read from cursor file " << filename << "\n";
     return None;
   }
-  str->seekg(0, istream::beg);
+
+  // Put back the read bytes. Do not use seekg, because this will
+  // corrupt the stream if it points to encrypted/compressed file
+  str->putback(magic[3]);
+  str->putback(magic[2]);
+  str->putback(magic[1]);
+  str->putback(magic[0]);
 
   X11_Cursor h = None;
   if (memcmp(magic, "Xcur", 4) == 0) {
@@ -2146,7 +2213,7 @@ get_cursor(const Filename &filename) {
     xcfile.seek = &xcursor_seek;
 
     XcursorImages *images = x11_pipe->_XcursorXcFileLoadImages(&xcfile, x11_pipe->_xcursor_size);
-    if (images != NULL) {
+    if (images != nullptr) {
       h = x11_pipe->_XcursorImagesLoadCursor(_display, images);
       x11_pipe->_XcursorImagesDestroy(images);
     }
@@ -2206,13 +2273,13 @@ read_ico(istream &ico) {
   size_t colorCount, bitsPerPixel;
   IcoHeader header;
   IcoInfoHeader infoHeader;
-  IcoEntry *entries = NULL;
-  IcoColor color, *palette = NULL;
+  IcoEntry *entries = nullptr;
+  IcoColor color, *palette = nullptr;
 
   size_t xorBmpSize, andBmpSize;
   char *curXor, *curAnd;
-  char *xorBmp = NULL, *andBmp = NULL;
-  XcursorImage *image = NULL;
+  char *xorBmp = nullptr, *andBmp = nullptr;
+  XcursorImage *image = nullptr;
   X11_Cursor ret = None;
 
   int def_size = x11_pipe->_xcursor_size;
@@ -2258,7 +2325,7 @@ read_ico(istream &ico) {
     size_t num_pixels = (size_t)img.get_x_size() * (size_t)img.get_y_size();
     unsigned int *dest = image->pixels;
 
-    if (alpha != NULL) {
+    if (alpha != nullptr) {
       for (size_t p = 0; p < num_pixels; ++p) {
         *dest++ = (*alpha << 24U) | (ptr->r << 16U) | (ptr->g << 8U) | (ptr->b);
         ++ptr;

@@ -15,9 +15,11 @@ try:
         import queue
     else:
         import Queue as queue
+except KeyboardInterrupt:
+    raise
 except:
     print("You are either using an incomplete or an old version of Python!")
-    print("Please install the development package of Python 2.x and try again.")
+    print("Please install the development package of Python and try again.")
     exit(1)
 
 from makepandacore import *
@@ -155,7 +157,7 @@ def usage(problem):
     print("  --everything      (enable every third-party lib)")
     print("  --directx-sdk=X   (specify version of DirectX SDK to use: jun2010, aug2009, mar2009, aug2006)")
     print("  --windows-sdk=X   (specify Windows SDK version, eg. 7.0, 7.1 or 10.  Default is 7.1)")
-    print("  --msvc-version=X  (specify Visual C++ version, eg. 10, 11, 12, 14.  Default is 10)")
+    print("  --msvc-version=X  (specify Visual C++ version, eg. 10, 11, 12, 14.  Default is 14)")
     print("  --use-icl         (experimental setting to use an intel compiler instead of MSVC on Windows)")
     print("")
     print("The simplest way to compile panda is to just type:")
@@ -316,8 +318,8 @@ def parseopts(args):
 
     if GetTarget() == 'windows':
         if not MSVC_VERSION:
-            print("No MSVC version specified. Defaulting to 10 (Visual Studio 2010).")
-            MSVC_VERSION = (10, 0)
+            print("No MSVC version specified. Defaulting to 14 (Visual Studio 2015).")
+            MSVC_VERSION = (14, 0)
         else:
             try:
                 MSVC_VERSION = tuple(int(d) for d in MSVC_VERSION.split('.'))[:2]
@@ -325,6 +327,17 @@ def parseopts(args):
                     MSVC_VERSION += (0,)
             except:
                 usage("Invalid setting for --msvc-version")
+
+        if MSVC_VERSION < (14, 0):
+            warn_prefix = "%sERROR:%s " % (GetColor("red"), GetColor())
+            print("=========================================================================")
+            print(warn_prefix + "Support for MSVC versions before 2015 has been discontinued.")
+            print(warn_prefix + "For more information, or any questions, please visit:")
+            print(warn_prefix + "  https://github.com/panda3d/panda3d/issues/288")
+            print("=========================================================================")
+            sys.stdout.flush()
+            time.sleep(1.0)
+            sys.exit(1)
 
         if not WINDOWS_SDK:
             print("No Windows SDK version specified. Defaulting to '7.1'.")
@@ -536,6 +549,7 @@ if (COMPILER == "MSVC"):
     PkgDisable("EGL")
     PkgDisable("CARBON")
     PkgDisable("COCOA")
+    DefSymbol("FLEX", "YY_NO_UNISTD_H")
     if (PkgSkip("PYTHON")==0):
         IncDirectory("ALWAYS", SDK["PYTHON"] + "/include")
         LibDirectory("ALWAYS", SDK["PYTHON"] + "/libs")
@@ -811,7 +825,7 @@ if (COMPILER=="GCC"):
         SmartPkgEnable("EIGEN",     "eigen3",    (), ("Eigen/Dense",), target_pkg = 'ALWAYS')
         SmartPkgEnable("ARTOOLKIT", "",          ("AR"), "AR/ar.h")
         SmartPkgEnable("FCOLLADA",  "",          ChooseLib(fcollada_libs, "FCOLLADA"), ("FCollada", "FCollada/FCollada.h"))
-        SmartPkgEnable("ASSIMP",    "assimp", ("assimp"), "assimp")
+        SmartPkgEnable("ASSIMP",    "",          ("assimp"), "assimp")
         SmartPkgEnable("FFMPEG",    ffmpeg_libs, ffmpeg_libs, ("libavformat/avformat.h", "libavcodec/avcodec.h", "libavutil/avutil.h"))
         SmartPkgEnable("SWSCALE",   "libswscale", "libswscale", ("libswscale/swscale.h"), target_pkg = "FFMPEG", thirdparty_dir = "ffmpeg")
         SmartPkgEnable("SWRESAMPLE","libswresample", "libswresample", ("libswresample/swresample.h"), target_pkg = "FFMPEG", thirdparty_dir = "ffmpeg")
@@ -1337,10 +1351,23 @@ def CompileCxx(obj,src,opts):
             # Fast math is nice, but we'd like to see NaN in dev builds.
             cmd += " -fno-finite-math-only"
 
+        # Make sure this is off to avoid GCC/Eigen bug (see GitHub #228)
+        cmd += " -fno-unsafe-math-optimizations"
+
         if (optlevel==1): cmd += " -ggdb -D_DEBUG"
         if (optlevel==2): cmd += " -O1 -D_DEBUG"
         if (optlevel==3): cmd += " -O2"
         if (optlevel==4): cmd += " -O3 -DNDEBUG"
+
+        # Enable more warnings.
+        cmd += " -Wall -Wno-unused-function"
+
+        if not src.endswith(".c"):
+            cmd += " -Wno-reorder"
+
+        # Ignore unused variables in NDEBUG builds, often used in asserts.
+        if optlevel == 4:
+            cmd += " -Wno-unused-variable"
 
         if src.endswith(".c"):
             cmd += ' ' + CFLAGS
@@ -1380,7 +1407,7 @@ def CompileBison(wobj, wsrc, opts):
         CopyFile(wdsth, GetOutputDir()+"/tmp/"+ifile+".h")
 
     # Finally, compile the generated source file.
-    CompileCxx(wobj,wdstc,opts)
+    CompileCxx(wobj, wdstc, opts + ["FLEX"])
 
 ########################################################################
 ##
@@ -2253,15 +2280,9 @@ DTOOL_CONFIG=[
     ("SUPPORT_FIXED_FUNCTION",         '1',                      '1'),
     ("DO_MEMORY_USAGE",                'UNDEF',                  'UNDEF'),
     ("DO_PIPELINING",                  '1',                      '1'),
-    ("EXPORT_TEMPLATES",               'yes',                    'yes'),
     ("DEFAULT_PATHSEP",                '";"',                    '":"'),
     ("WORDS_BIGENDIAN",                'UNDEF',                  'UNDEF'),
-    ("HAVE_NAMESPACE",                 '1',                      '1'),
-    ("HAVE_OPEN_MASK",                 'UNDEF',                  'UNDEF'),
-    ("HAVE_LOCKF",                     '1',                      '1'),
-    ("HAVE_WCHAR_T",                   '1',                      '1'),
-    ("HAVE_WSTRING",                   '1',                      '1'),
-    ("HAVE_TYPENAME",                  '1',                      '1'),
+    ("PHAVE_LOCKF",                    '1',                      '1'),
     ("SIMPLE_STRUCT_POINTERS",         '1',                      'UNDEF'),
     ("HAVE_DINKUM",                    'UNDEF',                  'UNDEF'),
     ("HAVE_STL_HASH",                  'UNDEF',                  'UNDEF'),
@@ -2271,7 +2292,6 @@ DTOOL_CONFIG=[
     ("PHAVE_GETOPT_H",                 'UNDEF',                  '1'),
     ("PHAVE_LINUX_INPUT_H",            'UNDEF',                  '1'),
     ("IOCTL_TERMINAL_WIDTH",           'UNDEF',                  '1'),
-    ("HAVE_STREAMSIZE",                '1',                      '1'),
     ("HAVE_IOS_TYPEDEFS",              '1',                      '1'),
     ("HAVE_IOS_BINARY",                '1',                      '1'),
     ("STATIC_INIT_GETENV",             '1',                      'UNDEF'),
@@ -2295,7 +2315,6 @@ DTOOL_CONFIG=[
     ("PHAVE_SYS_MALLOC_H",             'UNDEF',                  'UNDEF'),
     ("PHAVE_ALLOCA_H",                 'UNDEF',                  '1'),
     ("PHAVE_LOCALE_H",                 'UNDEF',                  '1'),
-    ("PHAVE_MINMAX_H",                 '1',                      'UNDEF'),
     ("PHAVE_SSTREAM",                  '1',                      '1'),
     ("PHAVE_NEW",                      '1',                      '1'),
     ("PHAVE_SYS_TYPES_H",              '1',                      '1'),
@@ -2304,7 +2323,6 @@ DTOOL_CONFIG=[
     ("PHAVE_UTIME_H",                  'UNDEF',                  '1'),
     ("PHAVE_GLOB_H",                   'UNDEF',                  '1'),
     ("PHAVE_DIRENT_H",                 'UNDEF',                  '1'),
-    ("PHAVE_SYS_SOUNDCARD_H",          'UNDEF',                  '1'),
     ("PHAVE_UCONTEXT_H",               'UNDEF',                  '1'),
     ("PHAVE_STDINT_H",                 '1',                      '1'),
     ("HAVE_RTTI",                      '1',                      '1'),
@@ -2317,7 +2335,6 @@ DTOOL_CONFIG=[
     ("HAVE_ZLIB",                      'UNDEF',                  'UNDEF'),
     ("HAVE_PNG",                       'UNDEF',                  'UNDEF'),
     ("HAVE_JPEG",                      'UNDEF',                  'UNDEF'),
-    ("PHAVE_JPEGINT_H",                '1',                      '1'),
     ("HAVE_VIDEO4LINUX",               'UNDEF',                  '1'),
     ("HAVE_TIFF",                      'UNDEF',                  'UNDEF'),
     ("HAVE_OPENEXR",                   'UNDEF',                  'UNDEF'),
@@ -2436,7 +2453,7 @@ def WriteConfigSettings():
         # Android does have RTTI, but we disable it anyway.
         dtool_config["HAVE_RTTI"] = 'UNDEF'
         dtool_config["PHAVE_GLOB_H"] = 'UNDEF'
-        dtool_config["HAVE_LOCKF"] = 'UNDEF'
+        dtool_config["PHAVE_LOCKF"] = 'UNDEF'
         dtool_config["HAVE_VIDEO4LINUX"] = 'UNDEF'
 
     if (GetOptimize() <= 2 and GetTarget() == "windows"):
@@ -2597,18 +2614,21 @@ PANDAVERSION_H_RUNTIME="""
 
 CHECKPANDAVERSION_CXX="""
 # include "dtoolbase.h"
-EXPCL_DTOOL int panda_version_$VERSION1_$VERSION2 = 0;
+EXPCL_DTOOL_DTOOLBASE int panda_version_$VERSION1_$VERSION2 = 0;
 """
 
 CHECKPANDAVERSION_H="""
+# ifndef CHECKPANDAVERSION_H
+# define CHECKPANDAVERSION_H
 # include "dtoolbase.h"
-extern EXPCL_DTOOL int panda_version_$VERSION1_$VERSION2;
-# ifndef WIN32
-/* For Windows, exporting the symbol from the DLL is sufficient; the
-      DLL will not load unless all expected public symbols are defined.
-      Other systems may not mind if the symbol is absent unless we
-      explictly write code that references it. */
-static int check_panda_version = panda_version_$VERSION1_$VERSION2;
+extern EXPCL_DTOOL_DTOOLBASE int panda_version_$VERSION1_$VERSION2;
+// Hack to forcibly depend on the check
+template<typename T>
+class CheckPandaVersion {
+public:
+  int check_version() { return panda_version_$VERSION1_$VERSION2; }
+};
+template class CheckPandaVersion<void>;
 # endif
 """
 
@@ -3652,6 +3672,7 @@ if (not RUNTIME):
   OPTS=['DIR:panda/src/putil', 'ZLIB', 'PYTHON']
   IGATEFILES=GetDirectoryContents('panda/src/putil', ["*.h", "*_composite*.cxx"])
   IGATEFILES.remove("test_bam.h")
+  IGATEFILES.remove("config_util.h")
   TargetAdd('libp3putil.in', opts=OPTS, input=IGATEFILES)
   TargetAdd('libp3putil.in', opts=['IMOD:panda3d.core', 'ILIB:libp3putil', 'SRCDIR:panda/src/putil'])
   TargetAdd('libp3putil_igate.obj', input='libp3putil.in', opts=["DEPENDENCYONLY"])
@@ -3778,6 +3799,7 @@ if (not RUNTIME):
 
   OPTS=['DIR:panda/src/pstatclient', 'PYTHON']
   IGATEFILES=GetDirectoryContents('panda/src/pstatclient', ["*.h", "*_composite*.cxx"])
+  IGATEFILES.remove("config_pstats.h")
   TargetAdd('libp3pstatclient.in', opts=OPTS, input=IGATEFILES)
   TargetAdd('libp3pstatclient.in', opts=['IMOD:panda3d.core', 'ILIB:libp3pstatclient', 'SRCDIR:panda/src/pstatclient'])
   TargetAdd('libp3pstatclient_igate.obj', input='libp3pstatclient.in', opts=["DEPENDENCYONLY"])
@@ -5082,7 +5104,7 @@ if (PkgSkip("SPEEDTREE")==0):
 # DIRECTORY: panda/src/testbed/
 #
 
-if (not RTDIST and not RUNTIME and PkgSkip("PVIEW")==0 and GetTarget() != 'android'):
+if (not RTDIST and not RUNTIME and PkgSkip("PVIEW")==0):
   OPTS=['DIR:panda/src/testbed']
   TargetAdd('pview_pview.obj', opts=OPTS, input='pview.cxx')
   TargetAdd('pview.exe', input='pview_pview.obj')
@@ -5101,6 +5123,7 @@ if (not RUNTIME and GetTarget() == 'android'):
   TargetAdd('org/panda3d/android/NativeIStream.class', opts=OPTS, input='NativeIStream.java')
   TargetAdd('org/panda3d/android/NativeOStream.class', opts=OPTS, input='NativeOStream.java')
   TargetAdd('org/panda3d/android/PandaActivity.class', opts=OPTS, input='PandaActivity.java')
+  TargetAdd('org/panda3d/android/PythonActivity.class', opts=OPTS, input='PythonActivity.java')
 
   TargetAdd('p3android_composite1.obj', opts=OPTS, input='p3android_composite1.cxx')
   TargetAdd('libp3android.dll', input='p3android_composite1.obj')
@@ -5111,16 +5134,27 @@ if (not RUNTIME and GetTarget() == 'android'):
   TargetAdd('android_main.obj', opts=OPTS, input='android_main.cxx')
 
   if (not RTDIST and PkgSkip("PVIEW")==0):
-    TargetAdd('pview_pview.obj', opts=OPTS, input='pview.cxx')
+    TargetAdd('libpview_pview.obj', opts=OPTS, input='pview.cxx')
     TargetAdd('libpview.dll', input='android_native_app_glue.obj')
     TargetAdd('libpview.dll', input='android_main.obj')
-    TargetAdd('libpview.dll', input='pview_pview.obj')
+    TargetAdd('libpview.dll', input='libpview_pview.obj')
     TargetAdd('libpview.dll', input='libp3framework.dll')
     if not PkgSkip("EGG"):
       TargetAdd('libpview.dll', input='libpandaegg.dll')
     TargetAdd('libpview.dll', input='libp3android.dll')
     TargetAdd('libpview.dll', input=COMMON_PANDA_LIBS)
     TargetAdd('libpview.dll', opts=['MODULE', 'ANDROID'])
+
+  if (not RTDIST and PkgSkip("PYTHON")==0):
+    OPTS += ['PYTHON']
+    TargetAdd('ppython_ppython.obj', opts=OPTS, input='python_main.cxx')
+    TargetAdd('libppython.dll', input='android_native_app_glue.obj')
+    TargetAdd('libppython.dll', input='android_main.obj')
+    TargetAdd('libppython.dll', input='ppython_ppython.obj')
+    TargetAdd('libppython.dll', input='libp3framework.dll')
+    TargetAdd('libppython.dll', input='libp3android.dll')
+    TargetAdd('libppython.dll', input=COMMON_PANDA_LIBS)
+    TargetAdd('libppython.dll', opts=['MODULE', 'ANDROID', 'PYTHON'])
 
 #
 # DIRECTORY: panda/src/androiddisplay/
@@ -5185,7 +5219,7 @@ if (PkgSkip("DIRECT")==0):
 #
 
 if (PkgSkip("DIRECT")==0):
-  OPTS=['DIR:direct/src/dcparser', 'WITHINPANDA', 'BISONPREFIX_dcyy', 'PYTHON']
+  OPTS=['DIR:direct/src/dcparser', 'BUILDING:DIRECT_DCPARSER', 'WITHINPANDA', 'BISONPREFIX_dcyy', 'PYTHON']
   CreateFile(GetOutputDir()+"/include/dcParser.h")
   TargetAdd('p3dcparser_dcParser.obj', opts=OPTS, input='dcParser.yxx')
   TargetAdd('dcParser.h', input='p3dcparser_dcParser.obj', opts=['DEPENDENCYONLY'])
@@ -6082,9 +6116,9 @@ if not PkgSkip("PANDATOOL"):
   TargetAdd('pfm-trans.exe', opts=['ADVAPI'])
 
   TargetAdd('pfm-bba_pfmBba.obj', opts=OPTS, input='pfmBba.cxx')
-  TargetAdd('pfm-bba_config_pfm.obj', opts=OPTS, input='config_pfm.cxx')
+  TargetAdd('pfm-bba_config_pfmprogs.obj', opts=OPTS, input='config_pfmprogs.cxx')
   TargetAdd('pfm-bba.exe', input='pfm-bba_pfmBba.obj')
-  TargetAdd('pfm-bba.exe', input='pfm-bba_config_pfm.obj')
+  TargetAdd('pfm-bba.exe', input='pfm-bba_config_pfmprogs.obj')
   TargetAdd('pfm-bba.exe', input='libp3progbase.lib')
   TargetAdd('pfm-bba.exe', input='libp3pandatoolbase.lib')
   TargetAdd('pfm-bba.exe', input=COMMON_PANDA_LIBS)
@@ -7505,7 +7539,7 @@ def MakeInstallerAndroid():
                 continue
             if '.so.' in line:
                 dep = line.rpartition('.so.')[0] + '.so'
-                oscmd("patchelf --replace-needed %s %s %s" % (line, dep, target))
+                oscmd("patchelf --replace-needed %s %s %s" % (line, dep, target), True)
             else:
                 dep = line
 
@@ -7516,6 +7550,7 @@ def MakeInstallerAndroid():
                     copy_library(os.path.realpath(fulldep), dep)
                     break
 
+    # Now copy every lib in the lib dir, and its dependencies.
     for base in os.listdir(source_dir):
         if not base.startswith('lib'):
             continue
@@ -7526,6 +7561,59 @@ def MakeInstallerAndroid():
         if os.path.islink(source):
             continue
         copy_library(source, base)
+
+    # Same for Python extension modules.  However, Android is strict about
+    # library naming, so we have a special naming scheme for these, in
+    # conjunction with a custom import hook to find these modules.
+    if not PkgSkip("PYTHON"):
+        suffix = GetExtensionSuffix()
+        source_dir = os.path.join(GetOutputDir(), "panda3d")
+        for base in os.listdir(source_dir):
+            if not base.endswith(suffix):
+                continue
+            modname = base[:-len(suffix)]
+            source = os.path.join(source_dir, base)
+            copy_library(source, "libpy.panda3d.{}.so".format(modname))
+
+        # Same for standard Python modules.
+        import _ctypes
+        source_dir = os.path.dirname(_ctypes.__file__)
+        for base in os.listdir(source_dir):
+            if not base.endswith('.so'):
+                continue
+            modname = base.partition('.')[0]
+            source = os.path.join(source_dir, base)
+            copy_library(source, "libpy.{}.so".format(modname))
+
+    def copy_python_tree(source_root, target_root):
+        for source_dir, dirs, files in os.walk(source_root):
+            if 'site-packages' in dirs:
+                dirs.remove('site-packages')
+
+            if not any(base.endswith('.py') for base in files):
+                continue
+
+            target_dir = os.path.join(target_root, os.path.relpath(source_dir, source_root))
+            target_dir = os.path.normpath(target_dir)
+            os.makedirs(target_dir, 0o755)
+
+            for base in files:
+                if base.endswith('.py'):
+                    target = os.path.join(target_dir, base)
+                    shutil.copy(os.path.join(source_dir, base), target)
+
+    # Copy the Python standard library to the .apk as well.
+    from distutils.sysconfig import get_python_lib
+    stdlib_source = get_python_lib(False, True)
+    stdlib_target = os.path.join("apkroot", "lib", "python{0}.{1}".format(*sys.version_info))
+    copy_python_tree(stdlib_source, stdlib_target)
+
+    # But also copy over our custom site.py.
+    shutil.copy("panda/src/android/site.py", os.path.join(stdlib_target, "site.py"))
+
+    # And now make a site-packages directory containing our direct/panda3d/pandac modules.
+    for tree in "panda3d", "direct", "pandac":
+        copy_python_tree(os.path.join(GetOutputDir(), tree), os.path.join(stdlib_target, "site-packages", tree))
 
     # Copy the models and config files to the virtual assets filesystem.
     oscmd("mkdir apkroot/assets")
@@ -7545,7 +7633,11 @@ def MakeInstallerAndroid():
     oscmd(aapt_cmd)
 
     # And add all the libraries to it.
-    oscmd("cd apkroot && aapt add ../%s classes.dex lib/%s/lib*.so" % (apk_unaligned, SDK["ANDROID_ABI"]))
+    oscmd("cd apkroot && aapt add ../%s classes.dex" % (apk_unaligned))
+    for path, dirs, files in os.walk('apkroot/lib'):
+        if files:
+            rel = os.path.relpath(path, 'apkroot')
+            oscmd("cd apkroot && aapt add ../%s %s/*" % (apk_unaligned, rel))
 
     # Now align the .apk, which is necessary for Android to load it.
     oscmd("zipalign -v -p 4 %s %s" % (apk_unaligned, apk_unsigned))

@@ -265,6 +265,7 @@ private:
 
   btGhostPairCallback _ghost_cb;
 
+  FilterAlgorithm _filter_algorithm;
   btFilterCallback1 _filter_cb1;
   btFilterCallback2 _filter_cb2;
   btFilterCallback3 _filter_cb3;
@@ -304,15 +305,15 @@ private:
   static TypeHandle _type_handle;
 };
 
-EXPCL_PANDABULLET ostream &
-operator << (ostream &out, BulletWorld::BroadphaseAlgorithm algorithm);
-EXPCL_PANDABULLET istream &
-operator >> (istream &in, BulletWorld::BroadphaseAlgorithm &algorithm);
+EXPCL_PANDABULLET std::ostream &
+operator << (std::ostream &out, BulletWorld::BroadphaseAlgorithm algorithm);
+EXPCL_PANDABULLET std::istream &
+operator >> (std::istream &in, BulletWorld::BroadphaseAlgorithm &algorithm);
 
-EXPCL_PANDABULLET ostream &
-operator << (ostream &out, BulletWorld::FilterAlgorithm algorithm);
-EXPCL_PANDABULLET istream &
-operator >> (istream &in, BulletWorld::FilterAlgorithm &algorithm);
+EXPCL_PANDABULLET std::ostream &
+operator << (std::ostream &out, BulletWorld::FilterAlgorithm algorithm);
+EXPCL_PANDABULLET std::istream &
+operator >> (std::istream &in, BulletWorld::FilterAlgorithm &algorithm);
 
 #include "bulletWorld.I"
 
