@@ -7794,24 +7794,38 @@ update_shader_buffer_data(ShaderBuffer *buffer, size_t start, size_t size,
     _glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
   }
 
-  if (data != nullptr) {
-    if (_supports_dsa) {
+#ifndef OPENGLES
+  if (_supports_dsa) {
+    if (data != nullptr) {
       _glNamedBufferSubData(gbc->_index, start, size, data);
-    } else {
-      _glBindBuffer(GL_SHADER_STORAGE_BUFFER, gbc->_index);
-      _glBufferSubData(GL_SHADER_STORAGE_BUFFER, start, size, data);
-      _glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-      _current_sbuffer_index = 0;
     }
-  } else {
-    if (_supports_dsa) {
+    else if (_supports_clear_buffer) {
       _glClearNamedBufferSubData(gbc->_index, GL_R8, start, size, GL_RED, GL_UNSIGNED_BYTE, nullptr);
-    } else {
-      _glBindBuffer(GL_SHADER_STORAGE_BUFFER, gbc->_index);
-      _glClearBufferSubData(GL_SHADER_STORAGE_BUFFER, GL_R8, start, size, GL_RED, GL_UNSIGNED_BYTE, nullptr);
-      _glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-      _current_sbuffer_index = 0;
     }
+    else {
+      void *null_data = calloc(1, size);
+      _glNamedBufferSubData(gbc->_index, start, size, null_data);
+      free(null_data);
+    }
+  } else
+#endif
+  {
+    _glBindBuffer(GL_SHADER_STORAGE_BUFFER, gbc->_index);
+    if (data != nullptr) {
+      _glBufferSubData(GL_SHADER_STORAGE_BUFFER, start, size, data);
+    }
+#ifndef OPENGLES
+    else if (_supports_clear_buffer) {
+      _glClearBufferSubData(GL_SHADER_STORAGE_BUFFER, GL_R8, start, size, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+    }
+#endif
+    else {
+      void *null_data = calloc(1, size);
+      _glBufferSubData(GL_SHADER_STORAGE_BUFFER, start, size, null_data);
+      free(null_data);
+    }
+    _glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    _current_sbuffer_index = 0;
   }
   report_my_gl_errors();
 
