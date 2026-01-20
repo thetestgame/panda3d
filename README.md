@@ -243,7 +243,7 @@ visit the [Sponsors page](https://www.panda3d.org/sponsors) on our web site.
 Thank you to everyone who has donated!
 
 [<img src="https://www.panda3d.org/wp-content/uploads/2024/08/Route4MeLogo1185x300-2-1-1024x259.png" alt="Route4Me" height="48">](https://route4me.com/)
-[<img src="https://www.lambdatest.com/blue-logo.png" alt="LambdaTest" height="48">](https://www.lambdatest.com/?utm_source=panda3d&utm_medium=sponsor)
+[<img src="https://www.panda3d.org/wp-content/uploads/2026/01/black-logo-1-e1768931551108.png" alt="TestMu AI" height="48">](https://www.testmu.ai/?utm_source=panda3d&utm_medium=sponsor)
 
 <a href="https://opencollective.com/panda3d" target="_blank">
   <img src="https://opencollective.com/panda3d/contribute/button@2x.png?color=blue" width=300 />
