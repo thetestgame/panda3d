@@ -3031,6 +3031,13 @@ def SetupBuildEnvironment(compiler):
                 libdir += '64'
             SYS_LIB_DIRS += [libdir]
 
+        if sys.platform != "darwin":
+            # Some Linux distributions (eg. Fedora) don't add /usr/local/lib64
+            if ("/usr/lib64" in SYS_LIB_DIRS and
+                "/usr/local/lib64" not in SYS_LIB_DIRS and
+                os.path.isdir("/usr/local/lib64")):
+                SYS_LIB_DIRS.append("/usr/local/lib64")
+
         # Now extract the preprocessor's include directories.
         cmd = GetCXX() + " -x c++ -v -E " + os.devnull
         cmd += sysroot_flag
