@@ -389,6 +389,13 @@ jobs:
         python -m pip install coverage
         python -m coverage combine $(find . -name '.coverage.*')
 
+        TOTAL=$(python -m coverage report --format=total)
+        echo '### Coverage Report' >> $GITHUB_STEP_SUMMARY
+        echo "<details><summary>Coverage: **${TOTAL}%**</summary>" >> $GITHUB_STEP_SUMMARY
+        echo '' >> $GITHUB_STEP_SUMMARY
+        python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
+        echo '</details>' >> $GITHUB_STEP_SUMMARY
+
         llvm-profdata merge pid-*.profraw -o coverage.profdata
         llvm-cov show $(grep -Rl LLVM_PROFILE_FILE . | sed 's/^/-object /') -instr-profile=coverage.profdata > coverage.txt
         bash <(curl -s https://codecov.io/bash) -y ../.github/codecov.yml
