@@ -391,7 +391,7 @@ jobs:
 
         TOTAL=$(python -m coverage report --format=total)
         echo '### Coverage Report' >> $GITHUB_STEP_SUMMARY
-        echo "<details><summary>Coverage: **${TOTAL}%**</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "<details><summary>Coverage: <b>${TOTAL}%</b></summary>" >> $GITHUB_STEP_SUMMARY
         echo '' >> $GITHUB_STEP_SUMMARY
         python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
         echo '</details>' >> $GITHUB_STEP_SUMMARY
