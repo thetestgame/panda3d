@@ -36,8 +36,8 @@ import os
 from typing import Any, Callable, Iterable, Union
 
 # Type aliases for loadModel, loadSound, etc. annotations
-_ModelPath = Union[str, Filename, os.PathLike[str]]
-_SoundPath = Union[str, Filename, os.PathLike[str], MovieAudio]
+_ModelPath = Union[str, Filename, os.PathLike]
+_SoundPath = Union[str, Filename, os.PathLike, MovieAudio]
 
 # You can specify a phaseChecker callback to check
 # a modelPath to see if it is being loaded in the correct
