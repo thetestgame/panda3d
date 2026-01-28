@@ -22,6 +22,7 @@
 #include "directionalLight.h"
 #include "spotlight.h"
 #include "depthWriteAttrib.h"
+#include "depthBiasAttrib.h"
 #include "depthOffsetAttrib.h"
 #include "colorWriteAttrib.h"
 #include "alphaTestAttrib.h"
@@ -94,6 +95,7 @@ reset() {
   _inv_state_mask.clear_bit(ColorAttrib::get_class_slot());
   _inv_state_mask.clear_bit(ColorScaleAttrib::get_class_slot());
   _inv_state_mask.clear_bit(CullFaceAttrib::get_class_slot());
+  _inv_state_mask.clear_bit(DepthBiasAttrib::get_class_slot());
   _inv_state_mask.clear_bit(DepthOffsetAttrib::get_class_slot());
   _inv_state_mask.clear_bit(RenderModeAttrib::get_class_slot());
   _inv_state_mask.clear_bit(RescaleNormalAttrib::get_class_slot());
@@ -1579,11 +1581,15 @@ set_state_and_transform(const RenderState *target,
     _state_mask.set_bit(cull_face_slot);
   }
 
+  int depth_bias_slot = DepthBiasAttrib::get_class_slot();
   int depth_offset_slot = DepthOffsetAttrib::get_class_slot();
-  if (_target_rs->get_attrib(depth_offset_slot) != _state_rs->get_attrib(depth_offset_slot) ||
+  if (_target_rs->get_attrib(depth_bias_slot) != _state_rs->get_attrib(depth_bias_slot) ||
+      _target_rs->get_attrib(depth_offset_slot) != _state_rs->get_attrib(depth_offset_slot) ||
+      !_state_mask.get_bit(depth_bias_slot) ||
       !_state_mask.get_bit(depth_offset_slot)) {
     // PStatTimer timer(_draw_set_state_depth_offset_pcollector);
-    do_issue_depth_offset();
+    do_issue_depth_bias();
+    _state_mask.set_bit(depth_bias_slot);
     _state_mask.set_bit(depth_offset_slot);
   }
 
@@ -2110,10 +2116,19 @@ do_issue_rescale_normal() {
  *
  */
 void TinyGraphicsStateGuardian::
-do_issue_depth_offset() {
-  const DepthOffsetAttrib *target_depth_offset = DCAST(DepthOffsetAttrib, _target_rs->get_attrib_def(DepthOffsetAttrib::get_class_slot()));
+do_issue_depth_bias() {
+  const DepthOffsetAttrib *target_depth_offset;
+  _target_rs->get_attrib_def(target_depth_offset);
   int offset = target_depth_offset->get_offset();
-  _c->zbias = offset;
+
+  const DepthBiasAttrib *target_depth_bias;
+  if (_target_rs->get_attrib(target_depth_bias)) {
+    PN_stdfloat constant_factor = target_depth_bias->get_constant_factor();
+
+    _c->zbias = (int)(((PN_stdfloat)offset - constant_factor) * (1 << (ZB_POINT_Z_FRAC_BITS + 4)));
+  } else {
+    _c->zbias = offset << (ZB_POINT_Z_FRAC_BITS + 4);
+  }
 
   PN_stdfloat dr_near = 0.0f;
   PN_stdfloat dr_far = 1.0f;
