@@ -48,68 +48,68 @@ def getFname(op_a, op_b, mask):
 
 # We write the code that actually instantiates the various
 # pixel-storing functions to store_pixel_code.h.
-code = open('store_pixel_code.h', 'wb')
-print >> code, '/* This file is generated code--do not edit.  See store_pixel.py. */'
-print >> code, ''
+code = open('store_pixel_code.h', 'w')
+print('/* This file is generated code--do not edit.  See store_pixel.py. */', file=code)
+print('', file=code)
 
 # The external reference for the table containing the above function
 # pointers gets written here.
-table = open('store_pixel_table.h', 'wb')
-print >> table, '/* This file is generated code--do not edit.  See store_pixel.py. */'
-print >> table, ''
+table = open('store_pixel_table.h', 'w')
+print('/* This file is generated code--do not edit.  See store_pixel.py. */', file=table)
+print('', file=table)
 
 for op_a in Operands:
     for op_b in Operands:
         for mask in range(0, 16):
             fname = getFname(op_a, op_b, mask)
-            print >> code, '#define FNAME(name) %s' % (fname)
+            print('#define FNAME(name) %s' % (fname), file=code)
             if mask & (1 | 2 | 3):
-                print >> code, '#define FNAME_S(name) %s_s' % (fname)
+                print('#define FNAME_S(name) %s_s' % (fname), file=code)
 
-            print >> code, '#define OP_A(f, i) ((unsigned int)(%s))' % (CodeTable[op_a])
-            print >> code, '#define OP_B(f, i) ((unsigned int)(%s))' % (CodeTable[op_b])
+            print('#define OP_A(f, i) ((unsigned int)(%s))' % (CodeTable[op_a]), file=code)
+            print('#define OP_B(f, i) ((unsigned int)(%s))' % (CodeTable[op_b]), file=code)
             for b in range(0, 4):
                 if (mask & (1 << b)):
-                    print >> code, "#define STORE_PIXEL_%s(fr, r) STORE_PIX_CLAMP(r)" % (b)
+                    print("#define STORE_PIXEL_%s(fr, r) STORE_PIX_CLAMP(r)" % (b), file=code)
                 else:
-                    print >> code, "#define STORE_PIXEL_%s(fr, r) (fr)" % (b)
-            print >> code, '#include "store_pixel.h"'
-            print >> code, ''
+                    print("#define STORE_PIXEL_%s(fr, r) (fr)" % (b), file=code)
+            print('#include "store_pixel.h"', file=code)
+            print('', file=code)
 
 
 # Now, generate the table of function pointers.
 arraySize = '[%s][%s][16]' % (len(Operands), len(Operands))
 
-print >> table, 'extern const ZB_storePixelFunc store_pixel_funcs%s;' % (arraySize)
-print >> code, 'const ZB_storePixelFunc store_pixel_funcs%s = {' % (arraySize)
+print('extern const ZB_storePixelFunc store_pixel_funcs%s;' % (arraySize), file=table)
+print('const ZB_storePixelFunc store_pixel_funcs%s = {' % (arraySize), file=code)
 
 for op_a in Operands:
-    print >> code, '  {'
+    print('  {', file=code)
     for op_b in Operands:
-        print >> code, '    {'
+        print('    {', file=code)
         for mask in range(0, 16):
             fname = getFname(op_a, op_b, mask)
-            print >> code, '      %s,' % (fname)
-        print >> code, '    },'
-    print >> code, '  },'
-print >> code, '};'
+            print('      %s,' % (fname), file=code)
+        print('    },', file=code)
+    print('  },', file=code)
+print('};', file=code)
 
-print >> code
+print('', file=code)
 
 # Now do this again, but for the sRGB function pointers.
-print >> table, 'extern const ZB_storePixelFunc store_pixel_funcs_sRGB%s;' % (arraySize)
-print >> code, 'const ZB_storePixelFunc store_pixel_funcs_sRGB%s = {' % (arraySize)
+print('extern const ZB_storePixelFunc store_pixel_funcs_sRGB%s;' % (arraySize), file=table)
+print('const ZB_storePixelFunc store_pixel_funcs_sRGB%s = {' % (arraySize), file=code)
 
 for op_a in Operands:
-    print >> code, '  {'
+    print('  {', file=code)
     for op_b in Operands:
-        print >> code, '    {'
+        print('    {', file=code)
         for mask in range(0, 16):
             fname = getFname(op_a, op_b, mask)
             if mask & (1 | 2 | 3):
-                print >> code, '      %s_s,' % (fname)
+                print('      %s_s,' % (fname), file=code)
             else:
-                print >> code, '      %s,' % (fname)
-        print >> code, '    },'
-    print >> code, '  },'
-print >> code, '};'
+                print('      %s,' % (fname), file=code)
+        print('    },', file=code)
+    print('  },', file=code)
+print('};', file=code)
