@@ -573,6 +573,18 @@ do_get_extension_func(const char *name) {
 }
 
 /**
+ * Returns true if this implementation may support Cg shaders.
+ */
+bool glxGraphicsStateGuardian::
+may_support_cg_shaders() {
+#ifdef HAVE_CG
+  return true;
+#else
+  return false;
+#endif
+}
+
+/**
  * Queries the GLX extension pointers.
  */
 void glxGraphicsStateGuardian::

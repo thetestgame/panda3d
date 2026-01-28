@@ -2059,7 +2059,8 @@ reset() {
   // Check for support for other types of shaders that can be used by Cg.
   _supports_basic_shaders = false;
 #if defined(HAVE_CG) && !defined(OPENGLES)
-  if (has_extension("GL_ARB_vertex_program") &&
+  if (may_support_cg_shaders() &&
+      has_extension("GL_ARB_vertex_program") &&
       has_extension("GL_ARB_fragment_program")) {
     _supports_basic_shaders = true;
     _shader_caps._active_vprofile = (int)CG_PROFILE_ARBVP1;
@@ -10234,6 +10235,18 @@ get_extension_func(const char *name) {
 void *CLP(GraphicsStateGuardian)::
 do_get_extension_func(const char *) {
   return nullptr;
+}
+
+/**
+ * Returns true if this implementation may support Cg shaders.
+ */
+bool CLP(GraphicsStateGuardian)::
+may_support_cg_shaders() {
+#if defined(HAVE_CG) && !defined(OPENGLES)
+  return true;
+#else
+  return false;
+#endif
 }
 
 /**

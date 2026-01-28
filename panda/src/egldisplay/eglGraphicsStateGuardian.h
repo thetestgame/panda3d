@@ -68,6 +68,7 @@ protected:
   virtual void query_gl_version();
   virtual void get_extra_extensions();
   virtual void *do_get_extension_func(const char *name);
+  virtual bool may_support_cg_shaders();
 
 private:
   int _egl_version_major, _egl_version_minor;

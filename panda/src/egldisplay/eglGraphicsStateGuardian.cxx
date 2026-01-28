@@ -377,3 +377,12 @@ void *eglGraphicsStateGuardian::
 do_get_extension_func(const char *name) {
   return (void *)eglGetProcAddress(name);
 }
+
+/**
+ * Returns true if this implementation may support Cg shaders.
+ */
+bool eglGraphicsStateGuardian::
+may_support_cg_shaders() {
+  // Never supported under EGL as CgGL is hard-wired to use GLX functions.
+  return false;
+}
