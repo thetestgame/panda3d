@@ -3998,8 +3998,8 @@ reset() {
   }
   _auto_detect_shader_model = _shader_model;
 
-  if (GLCAT.is_debug()) {
 #ifdef HAVE_CG
+  if (GLCAT.is_debug() && may_support_cg_shaders()) {
 #if CG_VERSION_NUM >= 2200
     GLCAT.debug() << "Supported Cg profiles:\n";
     int num_profiles = cgGetNumSupportedProfiles();
@@ -4037,8 +4037,10 @@ reset() {
     GLCAT.debug()
       << "Cg active geometry profile = "
       << cgGetProfileString((CGprofile)_shader_caps._active_gprofile) << "\n";
+  }
 #endif  // HAVE_CG
 
+  if (GLCAT.is_debug()) {
     GLCAT.debug() << "shader model = " << _shader_model << "\n";
   }
 #endif  // !OPENGLES
