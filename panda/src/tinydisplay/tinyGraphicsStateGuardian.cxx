@@ -229,10 +229,9 @@ clear(DrawableRegion *clearable) {
   }
 
   bool clear_z = false;
-  int z = 0;
+  ZPOINT z = 0;
   if (clearable->get_clear_depth_active()) {
-    // We ignore the specified depth clear value, since we don't support
-    // alternate depth compare functions anyway.
+    z = (ZPOINT)((1.0f - clearable->get_clear_depth()) * (1 << ZB_Z_BITS));
     clear_z = true;
   }
 
@@ -279,6 +278,18 @@ prepare_display_region(DisplayRegionPipelineReader *dr) {
   _c->viewport.xsize = xsize;
   _c->viewport.ysize = ysize;
   set_scissor(0.0f, 1.0f, 0.0f, 1.0f);
+
+  PN_stdfloat dr_near = 0.0f;
+  PN_stdfloat dr_far = 1.0f;
+  dr->get_depth_range(dr_near, dr_far);
+
+  if (dr_near == 0.0f && dr_far == 1.0f) {
+    _c->has_zrange = false;
+  } else {
+    _c->has_zrange = true;
+    _c->zmin = dr_near;
+    _c->zrange = dr_far - dr_near;
+  }
 
   nassertv(xmin >= 0 && xmin < _c->zb->xsize &&
            ymin >= 0 && ymin < _c->zb->ysize &&
@@ -875,7 +886,8 @@ begin_draw_primitives(const GeomPipelineReader *geom_reader,
   int depth_test_state = 1;    // zless
   _c->depth_test = 1;  // set this for ZB_line
   const DepthTestAttrib *target_depth_test = DCAST(DepthTestAttrib, _target_rs->get_attrib_def(DepthTestAttrib::get_class_slot()));
-  if (target_depth_test->get_mode() == DepthTestAttrib::M_none) {
+  if (target_depth_test->get_mode() == DepthTestAttrib::M_none ||
+      target_depth_test->get_mode() == DepthTestAttrib::M_always) {
     depth_test_state = 0;      // zless
     _c->depth_test = 0;
   }
@@ -1415,10 +1427,17 @@ framebuffer_copy_to_ram(Texture *tex, int view, int z,
     z_size = 1;
   }
 
-  Texture::ComponentType component_type = Texture::T_unsigned_byte;
-  Texture::Format format = Texture::F_rgba;
-  if (_current_properties->get_srgb_color()) {
-    format = Texture::F_srgb_alpha;
+  Texture::ComponentType component_type;
+  Texture::Format format;
+  if (rb._buffer_type & RenderBuffer::T_depth) {
+    component_type = Texture::T_unsigned_int;
+    format = Texture::F_depth_component;
+  } else {
+    component_type = Texture::T_unsigned_byte;
+    format = Texture::F_rgba;
+    if (_current_properties->get_srgb_color()) {
+      format = Texture::F_srgb_alpha;
+    }
   }
 
   if (tex->get_x_size() != w || tex->get_y_size() != h ||
@@ -1445,32 +1464,53 @@ framebuffer_copy_to_ram(Texture *tex, int view, int z,
     }
   }
 
-  PIXEL *ip = (PIXEL *)(image_ptr + image_size);
-  PIXEL *fo = _c->zb->pbuf + xo + yo * _c->zb->linesize / PSZB;
-  for (int y = 0; y < h; ++y) {
-    ip -= w;
-#ifndef WORDS_BIGENDIAN
-    // On a little-endian machine, we can copy the whole row at a time.
-    memcpy(ip, fo, w * PSZB);
-#else
-    // On a big-endian machine, we have to reverse the color-component order.
-    const char *source = (const char *)fo;
-    const char *stop = (const char *)fo + w * PSZB;
-    char *dest = (char *)ip;
-    while (source < stop) {
-      char b = source[0];
-      char g = source[1];
-      char r = source[2];
-      char a = source[3];
-      dest[0] = a;
-      dest[1] = r;
-      dest[2] = g;
-      dest[3] = b;
-      dest += 4;
-      source += 4;
+  if (rb._buffer_type & RenderBuffer::T_depth) {
+    size_t dst_stride = tex->get_x_size();
+    unsigned int *dst = (unsigned int *)(image_ptr + image_size);
+    size_t src_stride = _c->zb->xsize;
+    ZPOINT *src = _c->zb->zbuf + xo + src_stride * yo;
+
+    for (int y = 0; y < h; ++y) {
+      dst -= dst_stride;
+      for (int x = 0; x < w; ++x) {
+        ZPOINT z = src[x];
+        if (z == 0) {
+          z = 0xFFFFFFFF;
+        } else {
+          z = (1 << ZB_Z_BITS) - z;
+          z = z << (32 - ZB_Z_BITS);
+        }
+        dst[x] = z;
+      }
     }
+  } else {
+    PIXEL *ip = (PIXEL *)(image_ptr + image_size);
+    PIXEL *fo = _c->zb->pbuf + xo + yo * _c->zb->linesize / PSZB;
+    for (int y = 0; y < h; ++y) {
+      ip -= w;
+#ifndef WORDS_BIGENDIAN
+      // On a little-endian machine, we can copy the whole row at a time.
+      memcpy(ip, fo, w * PSZB);
+#else
+      // On a big-endian machine, we have to reverse the color-component order.
+      const char *source = (const char *)fo;
+      const char *stop = (const char *)fo + w * PSZB;
+      char *dest = (char *)ip;
+      while (source < stop) {
+        char b = source[0];
+        char g = source[1];
+        char r = source[2];
+        char a = source[3];
+        dest[0] = a;
+        dest[1] = r;
+        dest[2] = g;
+        dest[3] = b;
+        dest += 4;
+        source += 4;
+      }
 #endif
-    fo += _c->zb->linesize / PSZB;
+      fo += _c->zb->linesize / PSZB;
+    }
   }
 
   if (request != nullptr) {
@@ -2075,8 +2115,16 @@ do_issue_depth_offset() {
   int offset = target_depth_offset->get_offset();
   _c->zbias = offset;
 
+  PN_stdfloat dr_near = 0.0f;
+  PN_stdfloat dr_far = 1.0f;
+  if (_current_display_region != nullptr) {
+    _current_display_region->get_depth_range(dr_near, dr_far);
+  }
+
   PN_stdfloat min_value = target_depth_offset->get_min_value();
   PN_stdfloat max_value = target_depth_offset->get_max_value();
+  min_value = dr_far * min_value + dr_near * (1 - min_value);
+  max_value = dr_far * max_value + dr_near * (1 - max_value);
   if (min_value == 0.0f && max_value == 1.0f) {
     _c->has_zrange = false;
   } else {
