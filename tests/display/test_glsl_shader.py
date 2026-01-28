@@ -117,7 +117,7 @@ def run_glsl_compile_check(gsg, vert_path, frag_path, expect_fail=False):
     assert shader is not None
 
     if not gsg.supports_glsl:
-        expect_fail = True
+        pytest.skip("GLSL shaders not supported")
 
     shader.prepare_now(gsg.prepared_objects, gsg)
     assert shader.is_prepared(gsg.prepared_objects)
