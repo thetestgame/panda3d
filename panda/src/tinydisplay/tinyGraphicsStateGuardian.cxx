@@ -770,95 +770,99 @@ begin_draw_primitives(const GeomPipelineReader *geom_reader,
 
   int color_write_state = 0;  // cstore
 
-  const ColorWriteAttrib *target_color_write = DCAST(ColorWriteAttrib, _target_rs->get_attrib_def(ColorWriteAttrib::get_class_slot()));
+  const ColorWriteAttrib *target_color_write;
+  _target_rs->get_attrib_def(target_color_write);
   unsigned int color_channels =
     target_color_write->get_channels() & _color_write_mask;
+  unsigned int rgb_channels = color_channels & ColorWriteAttrib::C_rgb;
 
-  if (color_channels == ColorWriteAttrib::C_all) {
-    if (srgb_blend) {
-      color_write_state = 4;  // csstore
-    } else {
-      color_write_state = 0;  // cstore
-    }
-  } else {
-    // Implement a color mask.
-    int op_a = get_color_blend_op(ColorBlendAttrib::O_one);
-    int op_b = get_color_blend_op(ColorBlendAttrib::O_zero);
-
-    if (srgb_blend) {
-      _c->zb->store_pix_func = store_pixel_funcs_sRGB[op_a][op_b][color_channels];
-    } else {
-      _c->zb->store_pix_func = store_pixel_funcs[op_a][op_b][color_channels];
-    }
-    color_write_state = 2;   // cgeneral
-  }
-
-  const TransparencyAttrib *target_transparency = DCAST(TransparencyAttrib, _target_rs->get_attrib_def(TransparencyAttrib::get_class_slot()));
-  switch (target_transparency->get_mode()) {
-  case TransparencyAttrib::M_alpha:
-  case TransparencyAttrib::M_dual:
-    if (color_channels == ColorWriteAttrib::C_all) {
-      if (srgb_blend) {
-        color_write_state = 5;    // csblend
-      } else {
-        color_write_state = 1;    // cblend
-      }
-    } else {
-      // Implement a color mask, with alpha blending.
-      int op_a = get_color_blend_op(ColorBlendAttrib::O_incoming_alpha);
-      int op_b = get_color_blend_op(ColorBlendAttrib::O_one_minus_incoming_alpha);
-
-      if (srgb_blend) {
-        _c->zb->store_pix_func = store_pixel_funcs_sRGB[op_a][op_b][color_channels];
-      } else {
-        _c->zb->store_pix_func = store_pixel_funcs[op_a][op_b][color_channels];
-      }
-      color_write_state = 2;   // cgeneral
-    }
-    break;
-
-  case TransparencyAttrib::M_premultiplied_alpha:
-    {
-      // Implement a color mask, with pre-multiplied alpha blending.
-      int op_a = get_color_blend_op(ColorBlendAttrib::O_one);
-      int op_b = get_color_blend_op(ColorBlendAttrib::O_one_minus_incoming_alpha);
-
-      if (srgb_blend) {
-        _c->zb->store_pix_func = store_pixel_funcs_sRGB[op_a][op_b][color_channels];
-      } else {
-        _c->zb->store_pix_func = store_pixel_funcs[op_a][op_b][color_channels];
-      }
-      color_write_state = 2;   // cgeneral
-    }
-    break;
-
-  default:
-    break;
-  }
-
-  const ColorBlendAttrib *target_color_blend = DCAST(ColorBlendAttrib, _target_rs->get_attrib_def(ColorBlendAttrib::get_class_slot()));
-  if (target_color_blend->get_mode() == ColorBlendAttrib::M_add) {
-    // If we have a color blend set that we can support, it overrides the
-    // transparency set.
-    LColor c = target_color_blend->get_color();
-    _c->zb->blend_r = (int)(c[0] * ZB_POINT_RED_MAX);
-    _c->zb->blend_g = (int)(c[1] * ZB_POINT_GREEN_MAX);
-    _c->zb->blend_b = (int)(c[2] * ZB_POINT_BLUE_MAX);
-    _c->zb->blend_a = (int)(c[3] * ZB_POINT_ALPHA_MAX);
-
-    int op_a = get_color_blend_op(target_color_blend->get_operand_a());
-    int op_b = get_color_blend_op(target_color_blend->get_operand_b());
-
-    if (srgb_blend) {
-      _c->zb->store_pix_func = store_pixel_funcs_sRGB[op_a][op_b][color_channels];
-    } else {
-      _c->zb->store_pix_func = store_pixel_funcs[op_a][op_b][color_channels];
-    }
-    color_write_state = 2;     // cgeneral
-  }
+  const ColorBlendAttrib *target_color_blend;
+  _target_rs->get_attrib_def(target_color_blend);
 
   if (color_channels == ColorWriteAttrib::C_off) {
     color_write_state = 3;    // coff
+  }
+  else if (target_color_blend->get_mode() != ColorBlendAttrib::M_none) {
+    // If we have a color blend set that we can support, it overrides the
+    // transparency set.
+
+    int rgb_mode = get_color_blend_mode(target_color_blend->get_mode());
+    int alpha_mode;
+    if (color_channels & ColorWriteAttrib::C_alpha) {
+      alpha_mode = get_color_blend_mode(target_color_blend->get_alpha_mode());
+    } else {
+      // Disabled alpha write is encoded as a separate alpha mode, to cut down
+      // on redundancy in the store_pixel table.
+      alpha_mode = 3;
+    }
+
+    LColor c = target_color_blend->get_color();
+    unsigned int cr = (int)(c[0] * ZB_POINT_RED_MAX);
+    unsigned int cg = (int)(c[1] * ZB_POINT_GREEN_MAX);
+    unsigned int cb = (int)(c[2] * ZB_POINT_BLUE_MAX);
+    unsigned int ca = (int)(c[3] * ZB_POINT_ALPHA_MAX);
+
+    setup_color_blend(_c->zb->blenda, target_color_blend->get_operand_a(),
+                      target_color_blend->get_alpha_operand_a(),
+                      cr, cg, cb, ca);
+    setup_color_blend(_c->zb->blendb, target_color_blend->get_operand_b(),
+                      target_color_blend->get_alpha_operand_b(),
+                      cr, cg, cb, ca);
+
+    _c->zb->store_pix_func = store_pixel_funcs[rgb_mode][alpha_mode][rgb_channels][srgb_blend];
+    color_write_state = 2;     // cgeneral
+  }
+  else {
+    const TransparencyAttrib *target_transparency;
+    _target_rs->get_attrib_def(target_transparency);
+
+    switch (target_transparency->get_mode()) {
+    case TransparencyAttrib::M_alpha:
+    case TransparencyAttrib::M_dual:
+      if (color_channels == ColorWriteAttrib::C_all) {
+        if (srgb_blend) {
+          color_write_state = 5;    // csblend
+        } else {
+          color_write_state = 1;    // cblend
+        }
+      } else {
+        // Implement a color mask, with alpha blending.
+        setup_color_blend(_c->zb->blenda, ColorBlendAttrib::O_incoming_alpha, ColorBlendAttrib::O_one);
+        setup_color_blend(_c->zb->blendb, ColorBlendAttrib::O_one_minus_incoming_alpha, ColorBlendAttrib::O_one_minus_incoming_alpha);
+        int alpha_mode = (color_channels & ColorWriteAttrib::C_alpha) ? 0 : 3;
+        _c->zb->store_pix_func = store_pixel_funcs[0][alpha_mode][rgb_channels][srgb_blend];
+        color_write_state = 2;   // cgeneral
+      }
+      break;
+
+    case TransparencyAttrib::M_premultiplied_alpha:
+      {
+        // Implement a color mask, with pre-multiplied alpha blending.
+        setup_color_blend(_c->zb->blenda, ColorBlendAttrib::O_one, ColorBlendAttrib::O_one);
+        setup_color_blend(_c->zb->blendb, ColorBlendAttrib::O_one_minus_incoming_alpha, ColorBlendAttrib::O_one_minus_incoming_alpha);
+        int alpha_mode = (color_channels & ColorWriteAttrib::C_alpha) ? 0 : 3;
+        _c->zb->store_pix_func = store_pixel_funcs[0][alpha_mode][rgb_channels][srgb_blend];
+        color_write_state = 2;   // cgeneral
+      }
+      break;
+
+    default:
+      if (color_channels == ColorWriteAttrib::C_all) {
+        if (srgb_blend) {
+          color_write_state = 4;  // csstore
+        } else {
+          color_write_state = 0;  // cstore
+        }
+      } else {
+        // Implement a color mask.
+        setup_color_blend(_c->zb->blenda, ColorBlendAttrib::O_one, ColorBlendAttrib::O_one);
+        setup_color_blend(_c->zb->blendb, ColorBlendAttrib::O_zero, ColorBlendAttrib::O_zero);
+        int alpha_mode = (color_channels & ColorWriteAttrib::C_alpha) ? 0 : 3;
+        _c->zb->store_pix_func = store_pixel_funcs[0][alpha_mode][rgb_channels][srgb_blend];
+        color_write_state = 2;   // cgeneral
+      }
+      break;
+    }
   }
 
   int alpha_test_state = 0;   // anone
@@ -3098,64 +3102,139 @@ load_matrix(M4 *matrix, const TransformState *transform) {
 }
 
 /**
- * Returns the integer element of store_pixel_funcs (as defined by
- * store_pixel.py) that corresponds to the indicated ColorBlendAttrib operand
- * code.
+ * Returns the integer index into the array of store_pixel functions
+ * corresponding to the given blend mode.
+ */
+int TinyGraphicsStateGuardian::
+get_color_blend_mode(ColorBlendAttrib::Mode mode) {
+  switch (mode) {
+  case ColorBlendAttrib::M_none:
+  case ColorBlendAttrib::M_add:
+  case ColorBlendAttrib::M_subtract:
+  case ColorBlendAttrib::M_inv_subtract:
+    return 0;
+  case ColorBlendAttrib::M_min:
+    return 1;
+  case ColorBlendAttrib::M_max:
+    return 2;
+  }
+  return 0;
+}
+
+/**
+ * Returns the integer index into the array of operands computed by store_pixel
+ * that corresponds to the indicated ColorBlendAttrib operand code.
  */
 int TinyGraphicsStateGuardian::
 get_color_blend_op(ColorBlendAttrib::Operand operand) {
   switch (operand) {
   case ColorBlendAttrib::O_zero:
-    return 0;
   case ColorBlendAttrib::O_one:
-    return 1;
-  case ColorBlendAttrib::O_incoming_color:
-    return 2;
-  case ColorBlendAttrib::O_one_minus_incoming_color:
-    return 3;
-  case ColorBlendAttrib::O_fbuffer_color:
-    return 4;
-  case ColorBlendAttrib::O_one_minus_fbuffer_color:
-    return 5;
-  case ColorBlendAttrib::O_incoming_alpha:
-    return 6;
-  case ColorBlendAttrib::O_one_minus_incoming_alpha:
-    return 7;
-  case ColorBlendAttrib::O_fbuffer_alpha:
-    return 8;
-  case ColorBlendAttrib::O_one_minus_fbuffer_alpha:
-    return 9;
   case ColorBlendAttrib::O_constant_color:
-    return 10;
   case ColorBlendAttrib::O_one_minus_constant_color:
-    return 11;
   case ColorBlendAttrib::O_constant_alpha:
-    return 12;
   case ColorBlendAttrib::O_one_minus_constant_alpha:
-    return 13;
-
-  case ColorBlendAttrib::O_incoming_color_saturate:
-    return 1;
-
-  case ColorBlendAttrib::O_incoming1_color:
-    return 1;
-  case ColorBlendAttrib::O_one_minus_incoming1_color:
-    return 0;
-  case ColorBlendAttrib::O_incoming1_alpha:
-    return 1;
-  case ColorBlendAttrib::O_one_minus_incoming1_alpha:
-    return 0;
-
   case ColorBlendAttrib::O_color_scale:
-    return 10;
   case ColorBlendAttrib::O_one_minus_color_scale:
-    return 11;
   case ColorBlendAttrib::O_alpha_scale:
-    return 12;
   case ColorBlendAttrib::O_one_minus_alpha_scale:
-    return 13;
+    return 0;
+  case ColorBlendAttrib::O_incoming_color:
+  case ColorBlendAttrib::O_one_minus_incoming_color:
+  case ColorBlendAttrib::O_incoming_color_saturate:
+  case ColorBlendAttrib::O_incoming1_color:
+  case ColorBlendAttrib::O_one_minus_incoming1_color:
+  case ColorBlendAttrib::O_incoming1_alpha:
+  case ColorBlendAttrib::O_one_minus_incoming1_alpha:
+    return 1;
+  case ColorBlendAttrib::O_fbuffer_color:
+  case ColorBlendAttrib::O_one_minus_fbuffer_color:
+    return 2;
+  case ColorBlendAttrib::O_incoming_alpha:
+  case ColorBlendAttrib::O_one_minus_incoming_alpha:
+    return 3;
+  case ColorBlendAttrib::O_fbuffer_alpha:
+  case ColorBlendAttrib::O_one_minus_fbuffer_alpha:
+    return 4;
   }
   return 0;
+}
+
+/**
+ * Returns true if the color blend operand should be inverted.
+ */
+bool TinyGraphicsStateGuardian::
+is_color_blend_op_inverted(ColorBlendAttrib::Operand operand) {
+  switch (operand) {
+  case ColorBlendAttrib::O_zero:
+  case ColorBlendAttrib::O_constant_color:
+  case ColorBlendAttrib::O_constant_alpha:
+  case ColorBlendAttrib::O_color_scale:
+  case ColorBlendAttrib::O_alpha_scale:
+  case ColorBlendAttrib::O_incoming_color:
+  case ColorBlendAttrib::O_incoming_color_saturate:
+  case ColorBlendAttrib::O_incoming1_color:
+  case ColorBlendAttrib::O_incoming1_alpha:
+  case ColorBlendAttrib::O_fbuffer_color:
+  case ColorBlendAttrib::O_incoming_alpha:
+  case ColorBlendAttrib::O_fbuffer_alpha:
+    return false;
+  case ColorBlendAttrib::O_one:
+  case ColorBlendAttrib::O_one_minus_constant_color:
+  case ColorBlendAttrib::O_one_minus_constant_alpha:
+  case ColorBlendAttrib::O_one_minus_color_scale:
+  case ColorBlendAttrib::O_one_minus_alpha_scale:
+  case ColorBlendAttrib::O_one_minus_incoming_color:
+  case ColorBlendAttrib::O_one_minus_incoming1_color:
+  case ColorBlendAttrib::O_one_minus_incoming1_alpha:
+  case ColorBlendAttrib::O_one_minus_fbuffer_color:
+  case ColorBlendAttrib::O_one_minus_incoming_alpha:
+  case ColorBlendAttrib::O_one_minus_fbuffer_alpha:
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Sets up the color blending state for the given blend operand.
+ */
+void TinyGraphicsStateGuardian::
+setup_color_blend(ZBlend &blend, ColorBlendAttrib::Operand op_rgb,
+                  ColorBlendAttrib::Operand op_alpha,
+                  int cr, int cg, int cb, int ca) {
+
+  blend.op_rgb = get_color_blend_op(op_rgb);
+  blend.op_alpha = get_color_blend_op(op_alpha);
+
+  // If it's inverted (one minus), we xor the value with 0xffff
+  unsigned int mask_rgb = is_color_blend_op_inverted(op_rgb) ? 0xffff : 0x0;
+  unsigned int mask_alpha = is_color_blend_op_inverted(op_alpha) ? 0xffff : 0x0;
+
+  blend.xor_r = mask_rgb;
+  blend.xor_g = mask_rgb;
+  blend.xor_b = mask_rgb;
+  blend.xor_a = mask_alpha;
+
+  // A constant factor is implemented by doing effectively O_zero ^ constant,
+  // so we can conveniently reuse the xor mask field to store it!
+  if (op_rgb == ColorBlendAttrib::O_constant_color ||
+      op_rgb == ColorBlendAttrib::O_one_minus_constant_color) {
+    blend.xor_r ^= cr;
+    blend.xor_g ^= cg;
+    blend.xor_b ^= cb;
+  }
+  if (op_rgb == ColorBlendAttrib::O_constant_alpha ||
+      op_rgb == ColorBlendAttrib::O_one_minus_constant_alpha) {
+    blend.xor_r ^= ca;
+    blend.xor_g ^= ca;
+    blend.xor_b ^= ca;
+  }
+  if (op_alpha == ColorBlendAttrib::O_constant_color ||
+      op_alpha == ColorBlendAttrib::O_constant_alpha ||
+      op_alpha == ColorBlendAttrib::O_one_minus_constant_color ||
+      op_alpha == ColorBlendAttrib::O_one_minus_constant_alpha) {
+    blend.xor_a ^= ca;
+  }
 }
 
 /**
