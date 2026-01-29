@@ -121,7 +121,7 @@ def render_color_pixel(region, state, vertex_color=None):
         if sattr and sattr.auto_shader():
             pytest.skip("Cannot test auto-shader without Cg shader support")
 
-    # Set up the scene with a blank card rendering at specified distance.
+    # Set up the scene with a blank triangle rendering at specified distance.
     scene = core.NodePath("root")
     scene.set_attrib(core.DepthTestAttrib.make(core.RenderAttrib.M_always))
 
@@ -134,35 +134,31 @@ def render_color_pixel(region, state, vertex_color=None):
     else:
         format = core.GeomVertexFormat.get_v3()
 
-    vdata = core.GeomVertexData("card", format, core.Geom.UH_static)
-    vdata.unclean_set_num_rows(4)
+    vdata = core.GeomVertexData("triangle", format, core.Geom.UH_static)
+    vdata.unclean_set_num_rows(3)
 
     vertex = core.GeomVertexWriter(vdata, "vertex")
     vertex.set_data3(core.Vec3.rfu(-1, 0, 1))
-    vertex.set_data3(core.Vec3.rfu(-1, 0, -1))
-    vertex.set_data3(core.Vec3.rfu(1, 0, 1))
-    vertex.set_data3(core.Vec3.rfu(1, 0, -1))
+    vertex.set_data3(core.Vec3.rfu(-1, 0, -3))
+    vertex.set_data3(core.Vec3.rfu(3, 0, 1))
 
     if vertex_color is not None:
         color = core.GeomVertexWriter(vdata, "color")
         color.set_data4(vertex_color)
         color.set_data4(vertex_color)
         color.set_data4(vertex_color)
-        color.set_data4(vertex_color)
 
-    strip = core.GeomTristrips(core.Geom.UH_static)
+    strip = core.GeomTriangles(core.Geom.UH_static)
     strip.set_shade_model(core.Geom.SM_uniform)
-    strip.add_next_vertices(4)
-    strip.close_primitive()
+    strip.add_next_vertices(3)
 
     geom = core.Geom(vdata)
     geom.add_primitive(strip)
 
-    gnode = core.GeomNode("card")
+    gnode = core.GeomNode("triangle")
     gnode.add_geom(geom, state)
-    card = scene.attach_new_node(gnode)
-    card.set_pos(0, 2, 0)
-    card.set_scale(60)
+    triangle = scene.attach_new_node(gnode)
+    triangle.set_pos(0, 2, 0)
 
     region.active = True
     region.camera = camera
