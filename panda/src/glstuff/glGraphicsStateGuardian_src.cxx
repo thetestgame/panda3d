@@ -7030,6 +7030,22 @@ prepare_shader(Shader *se) {
 void CLP(GraphicsStateGuardian)::
 release_shader(ShaderContext *sc) {
 #ifndef OPENGLES_1
+  if (_vertex_array_shader_context == sc) {
+    _vertex_array_shader = nullptr;
+    _vertex_array_shader_context = nullptr;
+  }
+
+  if (_texture_binding_shader_context == sc) {
+    _texture_binding_shader = nullptr;
+    _texture_binding_shader_context = nullptr;
+  }
+
+  if (_current_shader_context == sc) {
+    sc->unbind();
+    _current_shader = nullptr;
+    _current_shader_context = nullptr;
+  }
+
   if (sc->is_of_type(CLP(ShaderContext)::get_class_type())) {
     ((CLP(ShaderContext) *)sc)->release_resources();
   }
@@ -7038,7 +7054,7 @@ release_shader(ShaderContext *sc) {
     ((CLP(CgShaderContext) *)sc)->release_resources();
   }
 #endif
-#endif
+#endif  // !OPENGLES_1
 
   delete sc;
 }
