@@ -71,7 +71,7 @@ def color_region(request, graphics_pipe):
         'host',
         0,
         host_fbprops,
-        core.WindowProperties.size(32, 32),
+        core.WindowProperties.size(8, 8),
         core.GraphicsPipe.BF_refuse_window,
     )
     engine.open_windows()
@@ -89,7 +89,7 @@ def color_region(request, graphics_pipe):
         'buffer',
         0,
         fbprops,
-        core.WindowProperties.size(32, 32),
+        core.WindowProperties.size(8, 8),
         core.GraphicsPipe.BF_refuse_window,
         host.gsg,
         host
@@ -111,7 +111,7 @@ def color_region(request, graphics_pipe):
         engine.remove_window(buffer)
 
 
-def render_color_pixel(region, state, vertex_color=None):
+def render_color_pixel(region, state, vertex_color=None, clear_color=(0, 0, 0, 1)):
     """Renders a fragment using the specified render settings, and returns the
     resulting color value."""
 
@@ -163,13 +163,17 @@ def render_color_pixel(region, state, vertex_color=None):
     region.active = True
     region.camera = camera
 
-    color_texture = core.Texture("color")
-    region.window.add_render_texture(color_texture,
-                                     core.GraphicsOutput.RTM_copy_ram,
-                                     core.GraphicsOutput.RTP_color)
+    region.window.set_clear_color(clear_color)
+    try:
+        color_texture = core.Texture("color")
+        region.window.add_render_texture(color_texture,
+                                         core.GraphicsOutput.RTM_copy_ram,
+                                         core.GraphicsOutput.RTP_color)
 
-    region.window.engine.render_frame()
-    region.window.clear_render_textures()
+        region.window.engine.render_frame()
+    finally:
+        region.window.clear_render_textures()
+        region.window.set_clear_color((0, 0, 0, 1))
 
     col = core.LColor()
     color_texture.peek().lookup(col, 0.5, 0.5)
@@ -182,6 +186,104 @@ def test_color_write_mask(color_region):
     )
     result = render_color_pixel(color_region, state)
     assert result == (0, 1, 0, 1)
+
+
+OP_NAMES = ['zero', 'one',
+    'incoming_color', 'one_minus_incoming_color',
+    'fbuffer_color', 'one_minus_fbuffer_color',
+    'incoming_alpha', 'one_minus_incoming_alpha',
+    'fbuffer_alpha', 'one_minus_fbuffer_alpha',
+    'constant_color', 'one_minus_constant_color',
+    'constant_alpha', 'one_minus_constant_alpha'
+]
+@pytest.mark.parametrize('op_name_a', OP_NAMES)
+@pytest.mark.parametrize('op_name_b', OP_NAMES)
+def test_color_blend_add(color_region, op_name_a, op_name_b):
+    fbuffer = core.LColor(0.2, 0.4, 0.6, 0.8)
+    incoming = core.LColor(0.3, 0.5, 0.7, 0.1)
+    const = core.LColor(0.0, 1.0, 0.5, 0.25)
+
+    op_a = getattr(core.ColorBlendAttrib, 'O_' + op_name_a)
+    op_b = getattr(core.ColorBlendAttrib, 'O_' + op_name_b)
+    state = core.RenderState.make(
+        core.ColorAttrib.make_flat(incoming),
+        core.ColorBlendAttrib.make(core.ColorBlendAttrib.M_add, op_a, op_b, const),
+    )
+
+    # Calculate what it should be.
+    def calc_op(op):
+        if op == core.ColorBlendAttrib.O_zero:
+            return core.LColor(0.0)
+        if op == core.ColorBlendAttrib.O_one:
+            return core.LColor(1.0)
+        if op == core.ColorBlendAttrib.O_incoming_color:
+            return incoming
+        if op == core.ColorBlendAttrib.O_one_minus_incoming_color:
+            return core.LColor(1.0) - incoming
+        if op == core.ColorBlendAttrib.O_fbuffer_color:
+            return fbuffer
+        if op == core.ColorBlendAttrib.O_one_minus_fbuffer_color:
+            return core.LColor(1.0) - fbuffer
+        if op == core.ColorBlendAttrib.O_incoming_alpha:
+            return core.LColor(incoming.w)
+        if op == core.ColorBlendAttrib.O_one_minus_incoming_alpha:
+            return core.LColor(1.0 - incoming.w)
+        if op == core.ColorBlendAttrib.O_fbuffer_alpha:
+            return core.LColor(fbuffer.w)
+        if op == core.ColorBlendAttrib.O_one_minus_fbuffer_alpha:
+            return core.LColor(1.0 - fbuffer.w)
+        if op == core.ColorBlendAttrib.O_constant_color:
+            return const
+        if op == core.ColorBlendAttrib.O_one_minus_constant_color:
+            return core.LColor(1.0) - const
+        if op == core.ColorBlendAttrib.O_constant_alpha:
+            return core.LColor(const.w)
+        if op == core.ColorBlendAttrib.O_one_minus_constant_alpha:
+            return core.LColor(1.0 - const.w)
+
+    term_a = core.LColor(incoming)
+    term_a.componentwise_mult(calc_op(op_a))
+    term_b = core.LColor(fbuffer)
+    term_b.componentwise_mult(calc_op(op_b))
+    expected = term_a + term_b
+    expected = expected.fmax(core.LColor(0)).fmin(core.LColor(1))
+
+    result = render_color_pixel(color_region, state, clear_color=fbuffer)
+    assert result.almost_equal(expected, FUZZ)
+
+
+@pytest.mark.parametrize('rgb_mode', ['min', 'max'])
+@pytest.mark.parametrize('alpha_mode', ['min', 'max'])
+def test_color_blend_min_max(color_region, rgb_mode, alpha_mode):
+    fbuffer = core.LColor(0.2, 0.5, 0.6, 0.8)
+    incoming = core.LColor(0.3, 0.4, 0.7, 0.1)
+
+    # Note that operands are ignored for M_min and M_max
+    state = core.RenderState.make(
+        core.ColorAttrib.make_flat(incoming),
+        core.ColorBlendAttrib.make(
+            getattr(core.ColorBlendAttrib, 'M_' + rgb_mode),
+            core.ColorBlendAttrib.O_one,
+            core.ColorBlendAttrib.O_one,
+            getattr(core.ColorBlendAttrib, 'M_' + alpha_mode),
+            core.ColorBlendAttrib.O_one,
+            core.ColorBlendAttrib.O_one,
+        ),
+    )
+
+    if rgb_mode == 'min':
+        expected = fbuffer.fmin(incoming)
+    elif rgb_mode == 'max':
+        expected = fbuffer.fmax(incoming)
+
+    if rgb_mode != alpha_mode:
+        if alpha_mode == 'min':
+            expected.w = min(fbuffer.w, incoming.w)
+        elif alpha_mode == 'max':
+            expected.w = max(fbuffer.w, incoming.w)
+
+    result = render_color_pixel(color_region, state, clear_color=fbuffer)
+    assert result.almost_equal(expected, FUZZ)
 
 
 def test_color_empty(color_region, shader_attrib, material_attrib):
@@ -317,6 +419,7 @@ def test_color_transparency(color_region, shader_attrib, light_attrib):
     )
     result = render_color_pixel(color_region, state)
     assert result.x == pytest.approx(0.75, 0.1)
+    assert result.w == pytest.approx(1.0, 0.1)
 
 
 def test_color_transparency_flat(color_region, shader_attrib, light_attrib):
@@ -333,6 +436,7 @@ def test_color_transparency_flat(color_region, shader_attrib, light_attrib):
     )
     result = render_color_pixel(color_region, state)
     assert result.x == pytest.approx(0.75, 0.1)
+    assert result.w == pytest.approx(1.0, 0.1)
 
 
 def test_color_transparency_vertex(color_region, shader_attrib, light_attrib):
@@ -349,6 +453,7 @@ def test_color_transparency_vertex(color_region, shader_attrib, light_attrib):
     )
     result = render_color_pixel(color_region, state, vertex_color=(1, 1, 1, 0.5))
     assert result.x == pytest.approx(0.75, 0.1)
+    assert result.w == pytest.approx(1.0, 0.1)
 
 
 def test_color_transparency_no_light(color_region, shader_attrib):
@@ -363,6 +468,7 @@ def test_color_transparency_no_light(color_region, shader_attrib):
     )
     result = render_color_pixel(color_region, state)
     assert result.x == pytest.approx(1.0, 0.1)
+    assert result.w == pytest.approx(1.0, 0.1)
 
 
 def test_texture_occlusion(color_region):
