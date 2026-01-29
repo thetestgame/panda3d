@@ -280,10 +280,34 @@ void eglGraphicsStateGuardian::
 reset() {
   BaseGraphicsStateGuardian::reset();
 
+#ifdef OPENGLES
+  _supports_surfaceless = has_extension("GL_OES_surfaceless_context") &&
+#else
+  _supports_surfaceless =
+#endif
+    has_extension("EGL_KHR_surfaceless_context");
+
   if (_gl_renderer == "Software Rasterizer") {
     _fbprops.set_force_software(1);
     _fbprops.set_force_hardware(0);
   }
+}
+
+/**
+ * Ensures that the context is current.  May return false if the context cannot
+ * be bound without a window.
+ */
+bool eglGraphicsStateGuardian::
+make_current() {
+  if (eglGetCurrentContext() == _context) {
+    return true;
+  }
+
+  if (_supports_surfaceless) {
+    return eglMakeCurrent(_egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, _context) != EGL_FALSE;
+  }
+
+  return false;
 }
 
 /**

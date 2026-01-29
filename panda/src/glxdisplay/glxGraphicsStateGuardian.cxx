@@ -435,6 +435,19 @@ choose_pixel_format(const FrameBufferProperties &properties,
 }
 
 /**
+ * Ensures that the context is current.  May return false if the context cannot
+ * be bound without a window.
+ */
+bool glxGraphicsStateGuardian::
+make_current() {
+  if (glXGetCurrentContext() == _context) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Returns true if the runtime GLX version number is at least the indicated
  * value, false otherwise.
  */
