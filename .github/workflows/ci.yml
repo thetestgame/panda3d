@@ -13,7 +13,7 @@ jobs:
         profile:
         - ubuntu-bionic-double-standard-unity-makefile
         - ubuntu-bionic-coverage-ninja
-        #- macos-coverage-unity-xcode
+        - macos-coverage-unity-xcode
         - macos-nometa-standard-makefile
         - windows-standard-unity-msvc
         - windows-nopython-nometa-standard-msvc
@@ -43,16 +43,16 @@ jobs:
           double: NO
           asan: YES
 
-        #- profile: macos-coverage-unity-xcode
-        #  os: macOS-15
-        #  config: Coverage
-        #  unity: YES
-        #  generator: Xcode
-        #  compiler: Default
-        #  metalibs: YES
-        #  python: YES
-        #  eigen: NO
-        #  double: NO
+        - profile: macos-coverage-unity-xcode
+          os: macOS-15
+          config: Coverage
+          unity: YES
+          generator: Xcode
+          compiler: Default
+          metalibs: YES
+          python: YES
+          eigen: NO
+          double: NO
 
         - profile: macos-nometa-standard-makefile
           os: macOS-15
