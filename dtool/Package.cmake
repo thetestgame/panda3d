@@ -106,7 +106,7 @@ if(THIRDPARTY_DIRECTORY)
     PNG
     SWResample
     SWScale
-    TIFF
+    Tiff
     VorbisFile
     VRPN
     ZLIB
