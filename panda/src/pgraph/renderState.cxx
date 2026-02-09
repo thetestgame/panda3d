@@ -1899,22 +1899,24 @@ int RenderState::
 complete_pointers(TypedWritable **p_list, BamReader *manager) {
   int pi = TypedWritable::complete_pointers(p_list, manager);
 
-  RenderAttribRegistry *reg = RenderAttribRegistry::quick_get_global_ptr();
-  for (size_t i = 0; i < (*_read_overrides).size(); ++i) {
-    int override = (*_read_overrides)[i];
+  if (_read_overrides != nullptr) {
+    RenderAttribRegistry *reg = RenderAttribRegistry::quick_get_global_ptr();
+    for (size_t i = 0; i < (*_read_overrides).size(); ++i) {
+      int override = (*_read_overrides)[i];
 
-    RenderAttrib *attrib = DCAST(RenderAttrib, p_list[pi++]);
-    if (attrib != nullptr) {
-      int slot = attrib->get_slot();
-      if (slot > 0 && slot < reg->get_max_slots()) {
-        _attributes[slot].set(attrib, override);
-        _filled_slots.set_bit(slot);
+      RenderAttrib *attrib = DCAST(RenderAttrib, p_list[pi++]);
+      if (attrib != nullptr) {
+        int slot = attrib->get_slot();
+        if (slot > 0 && slot < reg->get_max_slots()) {
+          _attributes[slot].set(attrib, override);
+          _filled_slots.set_bit(slot);
+        }
       }
     }
-  }
 
-  delete _read_overrides;
-  _read_overrides = nullptr;
+    delete _read_overrides;
+    _read_overrides = nullptr;
+  }
 
   return pi;
 }
@@ -1992,12 +1994,16 @@ fillin(DatagramIterator &scan, BamReader *manager) {
   TypedWritable::fillin(scan, manager);
 
   int num_attribs = scan.get_uint16();
-  _read_overrides = new vector_int;
-  (*_read_overrides).reserve(num_attribs);
+  if (num_attribs == 0) {
+    _read_overrides = nullptr;
+  } else {
+    _read_overrides = new vector_int;
+    (*_read_overrides).reserve(num_attribs);
 
-  for (int i = 0; i < num_attribs; ++i) {
-    manager->read_pointer(scan);
-    int override = scan.get_int32();
-    (*_read_overrides).push_back(override);
+    for (int i = 0; i < num_attribs; ++i) {
+      manager->read_pointer(scan);
+      int override = scan.get_int32();
+      (*_read_overrides).push_back(override);
+    }
   }
 }
